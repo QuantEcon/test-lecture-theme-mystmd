@@ -1,0 +1,40 @@
+# Guards the derivation: lectures/ must be exactly what bin/sync-from-sphinx
+# produces from the recorded source commit. A hand edit under lectures/ fails
+# this check; the fix is to edit the Sphinx corpus and re-sync.
+name: Sources are derived
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  sync-check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - name: Read the recorded source commits
+        id: src
+        run: |
+          echo "sphinx=$(grep '^source_commit:' lectures/SOURCE.yml | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+          echo "theme=$(grep '^rewrite_script_commit:' lectures/SOURCE.yml | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v5
+        with:
+          repository: QuantEcon/test-lecture-theme-sphinx
+          ref: ${{ steps.src.outputs.sphinx }}
+          path: sphinx
+      - uses: actions/checkout@v5
+        with:
+          repository: QuantEcon/quantecon-theme.mystmd
+          ref: ${{ steps.src.outputs.theme }}
+          path: theme
+      - name: Re-derive and diff
+        run: |
+          cp -r lectures /tmp/committed
+          bin/sync-from-sphinx sphinx theme
+          # SOURCE.yml carries a timestamp; everything else must be identical.
+          diff -r --exclude=SOURCE.yml --exclude=_build /tmp/committed lectures && echo "lectures/ is exactly the derived tree"

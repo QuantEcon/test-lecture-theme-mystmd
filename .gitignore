@@ -1,0 +1,8 @@
+lectures/_build/
+_build/
+lectures.new/
+node_modules/
+.ipynb_checkpoints/
+__pycache__/
+*.pyc
+.DS_Store

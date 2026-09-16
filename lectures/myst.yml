@@ -1,0 +1,92 @@
+# mystmd configuration for test-lecture-theme-mystmd.
+#
+# Hand-written counterpart of the Sphinx corpus's _config.yml and _toc.yml
+# (QuantEcon/test-lecture-theme-sphinx). It follows the experimental jb2 build
+# of lecture-python-programming (its `lectures/myst.yml` on branch jb2) and the
+# theme's migration checklist (docs/migrating.md), so that the corpus is
+# configured the way a migrated lecture repository will be.
+version: 1
+project:
+  title: Theme Parity Test Lectures
+  description: A representative corpus of the MyST constructs used across the QuantEcon Python lecture series, built with the QuantEcon mystmd fork and quantecon-theme.mystmd.
+  keywords: Python, QuantEcon, Quantitative Economics, Economics, MyST, Jupyter Book, theme, test
+  authors:
+    - name: Thomas J. Sargent
+      url: http://www.tomsargent.com/
+    - name: John Stachurski
+      url: https://johnstachurski.net/
+  github: https://github.com/QuantEcon/test-lecture-theme-mystmd
+  license:
+    content: CC-BY-SA-4.0
+  bibliography:
+    - _static/quant-econ.bib
+  # The theme's git history header needs this plugin and a full-depth checkout.
+  plugins:
+    - https://raw.githubusercontent.com/QuantEcon/quantecon-theme.mystmd/v3.1.0/plugins/git-metadata.mjs
+  # The macro set the Sphinx theme injects plus this corpus's own additions
+  # (see math.md); KaTeX gets only what is declared here. MathJax's
+  # [definition, nargs] array form is not accepted -- strings only.
+  math:
+    '\argmax': '\operatorname*{arg\,max}'
+    '\argmin': '\operatorname*{arg\,min}'
+    '\col': 'col'
+    '\Span': 'span'
+    '\epsilon': '\varepsilon'
+    '\EE': '\mathbb{E}'
+    '\PP': '\mathbb{P}'
+    '\RR': '\mathbb{R}'
+    '\NN': '\mathbb{N}'
+    '\ZZ': '\mathbb{Z}'
+    '\BB': '\mathbb{B}'
+    '\dD': '\mathcal{D}'
+    '\fF': '\mathcal{F}'
+    '\lL': '\mathcal{L}'
+    '\Exp': '\operatorname{Exp}'
+    '\linop': '\mathcal{L}(\mathbb{B})'
+  numbering:
+    titles: true
+    headings: true
+    heading_1: false
+    figure:
+      template: Fig. %s
+  # Same order as the Sphinx _toc.yml; the part titles are its part captions.
+  toc:
+    - file: intro.md
+    - title: Text and Structure
+      children:
+        - file: typography.md
+        - file: math.md
+        - file: references.md
+    - title: Executable Content
+      children:
+        - file: code_cells.md
+        - file: figures.md
+    - title: Directive Families
+      children:
+        - file: admonitions.md
+        - file: exercises.md
+        - file: proofs.md
+    - title: Real Lectures
+      children:
+        - file: lp_intro.md
+    - title: Other
+      children:
+        - file: troubleshooting.md
+        - file: zreferences.md
+        - file: status.md
+  exclude:
+    - README.md
+    - _admonition/gpu.md
+site:
+  # Pinned theme release; bump the vX.Y.Z to take a new theme.
+  template: https://github.com/QuantEcon/quantecon-theme.mystmd/releases/download/v3.1.0/quantecon-theme.zip
+  options:
+    site_url: https://quantecon.github.io/test-lecture-theme-mystmd/
+    twitter: quantecon
+    twitter_logo_url: https://assets.quantecon.org/img/qe-twitter-logo.png
+    og_logo_url: https://assets.quantecon.org/img/qe-og-logo.png
+    favicon: _static/lectures-favicon.ico
+    # Launch is opt-in from theme v3.0.0 and the Sphinx corpus names a
+    # notebook repository that does not exist. Both are left unset here, so
+    # the comparison records "Launch present on Sphinx, absent on mystmd" as
+    # a configured difference rather than a theme defect.

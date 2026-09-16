@@ -1,0 +1,85 @@
+# Builds the corpus with the QuantEcon mystmd fork, as the experimental jb2
+# build of lecture-python-programming does, and deploys: GitHub Pages on every
+# push to main (the comparison harness reads the live site), a Netlify preview
+# on pull requests once the site's secrets are set.
+name: Build and Deploy
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The fork commit the corpus builds with: main as of 2026-09-10, tagged qe-v10.
+  # Bump deliberately; the tag list is https://github.com/QuantEcon/mystmd/tags.
+  QE_MYSTMD_SHA: c1f274b8a27e150474bf2b70bd120627e1bb31ba
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0   # the git-metadata plugin reads each page's history
+
+      # Node 24 matches the theme's .nvmrc; the theme runs as a Remix server
+      # during `myst build --html`.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - uses: oven-sh/setup-bun@v2
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install the execution kernel
+        run: python -m pip install -r requirements.txt
+
+      - name: Install mystmd (QuantEcon fork, pinned)
+        run: |
+          mkdir -p /tmp/qe-mystmd && cd /tmp/qe-mystmd
+          git init -q
+          git remote add origin https://github.com/QuantEcon/mystmd.git
+          git fetch -q --depth 1 origin "$QE_MYSTMD_SHA"
+          git checkout -q FETCH_HEAD
+          bun install
+          bun run build
+          npm install -g /tmp/qe-mystmd/packages/mystmd
+          cat /tmp/qe-mystmd/quantecon/VERSION.yml | head -40
+          myst --version
+
+      - name: Build HTML (executing the code cells)
+        working-directory: lectures
+        run: myst build --html --execute
+        env:
+          BASE_URL: ${{ github.event_name == 'push' && format('/{0}', github.event.repository.name) || '' }}
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: lectures/_build/html
+
+      - name: Deploy to GitHub Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Deploy preview to Netlify
+        if: github.event_name == 'pull_request' && env.NETLIFY_SITE_ID != ''
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+        run: |
+          npm install -g netlify-cli
+          netlify deploy --dir lectures/_build/html --site "$NETLIFY_SITE_ID" --auth "$NETLIFY_AUTH_TOKEN" \
+            --alias "pr-${{ github.event.pull_request.number }}" --json | tee netlify.json
+          echo "preview: $(jq -r .deploy_url netlify.json)" >> "$GITHUB_STEP_SUMMARY"
