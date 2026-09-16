@@ -132,29 +132,6 @@ def u(c, gamma=2.0):
     return (c**(1 - gamma) - 1) / (1 - gamma)
 ```
 
-## Cell options
-
-`:load:` pulls the cell's source from a file (40 uses, three series):
-
-```{code-cell} python3
-:load: _static/lecture_specific/code/loaded_script.py
-```
-
-```{code-cell} python3
-present_value([100, 100, 100]), crra_utility(2.0)
-```
-
-A caption and line numbers on a cell (the `workspace.md` pattern):
-
-```{code-cell} ipython3
-:caption: sine_wave.py
-:lineno-start: 1
-
-import numpy as np
-x = np.linspace(0, 2 * np.pi, 100)
-y = np.sin(x)
-```
-
 ## Output types
 
 Standard output and a warning on standard error, which the streams setting
@@ -250,3 +227,30 @@ plain text in a fence with no language
 ```
 
 And inline code inside prose: `np.linspace(0, 1, 5)`.
+
+## Cell options
+
+% Last on the page on purpose: on mystmd `:load:` is an unexpected option, so the
+% loaded functions never exist and the next cell raises, which halts execution of
+% every cell after it. Placing it last keeps the halt from hiding the surfaces above.
+
+`:load:` pulls the cell's source from a file (40 uses, three series):
+
+```{code-cell} python3
+:load: _static/lecture_specific/code/loaded_script.py
+```
+
+```{code-cell} python3
+present_value([100, 100, 100]), crra_utility(2.0)
+```
+
+A caption and line numbers on a cell (the `workspace.md` pattern):
+
+```{code-cell} ipython3
+:caption: sine_wave.py
+:lineno-start: 1
+
+import numpy as np
+x = np.linspace(0, 2 * np.pi, 100)
+y = np.sin(x)
+```
