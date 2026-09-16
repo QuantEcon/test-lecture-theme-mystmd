@@ -71,6 +71,7 @@ project:
         - file: lp_intro.md
     - title: Other
       children:
+        - file: build_info.md
         - file: troubleshooting.md
         - file: zreferences.md
         - file: status.md
