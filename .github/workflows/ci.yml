@@ -132,11 +132,40 @@ jobs:
           echo "myst $v"
           [[ $v == *"($qe)"* ]] || { echo "::error::myst --version prints '$v', but the fork at $QE_MYSTMD_SHA is '$qe'"; exit 1; }
 
+      # TEMPORARY diagnostic (remove once the cause is confirmed): the first
+      # container build failed at HTML export -- the theme's server could not
+      # fetch http://localhost:3100/config.json from myst's content server. Both
+      # servers bind "localhost"; the theme fetches it with a bundled node-fetch
+      # v2. Record how localhost resolves here and reproduce the pattern.
+      - name: Diagnose localhost inside the container
+        continue-on-error: true
+        run: |
+          echo "--- /etc/hosts"; cat /etc/hosts
+          echo "--- getent ahosts localhost"; getent ahosts localhost || true
+          echo "--- IPv6 on loopback (/proc/net/if_inet6)"; cat /proc/net/if_inet6 2>/dev/null || echo "(none)"
+          cat > /tmp/lh.js <<'JS'
+          const dns = require('dns'), http = require('http');
+          dns.lookup('localhost', { all: true }, (e, a) => console.log('lookup all  ', JSON.stringify(a)));
+          dns.lookup('localhost', (e, a, f) => console.log('lookup first', a, 'family', f));
+          const s = http.createServer((q, r) => r.end('ok')).listen(3199, 'localhost', () => {
+            console.log('server bound', JSON.stringify(s.address()));
+            http.get('http://localhost:3199', r => { console.log('http.get localhost ->', r.statusCode); s.close(); })
+                .on('error', e => { console.log('http.get localhost ERROR', e.code, e.address || ''); s.close(); });
+          });
+          JS
+          echo "--- node, default resolution"; node /tmp/lh.js
+          echo "--- node, --dns-result-order=ipv4first"; NODE_OPTIONS=--dns-result-order=ipv4first node /tmp/lh.js
+
       - name: Build HTML (executing the code cells)
         working-directory: lectures
         run: myst build --html --execute
         env:
           BASE_URL: ${{ github.event_name == 'push' && format('/{0}', github.event.repository.name) || '' }}
+          # Both of myst's servers bind "localhost", and the theme reaches the
+          # content server with node-fetch v2. Resolve localhost to 127.0.0.1 in
+          # every Node process (the theme's server inherits the environment), so
+          # the bind and the fetch always agree on one address family.
+          NODE_OPTIONS: --dns-result-order=ipv4first
 
       # myst exits 0 through two failures this container can cause: a Jupyter
       # server that will not start leaves every page without outputs, and git
