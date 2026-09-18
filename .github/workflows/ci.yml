@@ -133,6 +133,18 @@ jobs:
           echo "myst $v"
           [[ $v == *"($qe)"* ]] || { echo "::error::myst --version prints '$v', but the fork at $QE_MYSTMD_SHA is '$qe'"; exit 1; }
 
+      # The corpus's one package beyond the image, pinned in lectures/
+      # requirements.txt (synced from the Sphinx corpus) and installed before any
+      # notebook executes; PIP_CONSTRAINT then holds it, so code_cells.md's
+      # `!pip install --upgrade quantecon` cannot move it. Without this the
+      # engine's parallel execution made build_info's quantecon row depend on
+      # which page started first. Written via $GITHUB_ENV from the shell, because
+      # inside a container job the github.workspace expression is the host path.
+      - name: Install the corpus's pinned packages
+        run: |
+          python -m pip install --no-cache-dir -r lectures/requirements.txt
+          echo "PIP_CONSTRAINT=$GITHUB_WORKSPACE/lectures/requirements.txt" >> "$GITHUB_ENV"
+
       - name: Build HTML (executing the code cells)
         working-directory: lectures
         run: myst build --html --execute
