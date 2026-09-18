@@ -1,0 +1,7 @@
+# The one package this corpus installs beyond the build image
+# (ghcr.io/quantecon/quantecon-build, pinned by digest in .github/workflows/),
+# pinned so both theme-parity corpora execute and report the same version.
+# CI also exports this file as PIP_CONSTRAINT, so code_cells.md's
+# `!pip install --upgrade quantecon` cannot move it mid-build.
+# Lives in lectures/ so bin/sync-from-sphinx carries it to the mystmd corpus.
+quantecon==0.11.4

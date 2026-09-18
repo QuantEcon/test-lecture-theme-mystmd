@@ -169,10 +169,18 @@ def dig(path, *keys):
     return None
 
 def theme_version(dist):
+    """The theme's distribution version, or "" when it is not a distribution.
+
+    A built-in theme ships inside Sphinx rather than as its own package, so it
+    has no version of its own to report; printing nothing is accurate where a
+    pointer to a table row that may not exist would not be.
+    """
     try:
         return md.version(dist.replace("_", "-"))
-    except Exception:  # noqa: BLE001
-        return "(version above)"
+    except md.PackageNotFoundError:
+        return ""
+    except Exception:  # noqa: BLE001 - a build-info page must never fail the build
+        return "(version unavailable)"
 
 def template_name(template):
     """A mystmd site template as name and version.
