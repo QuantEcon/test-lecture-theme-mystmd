@@ -33,15 +33,15 @@ jobs:
     # GitHub's own actions now run on; Node 20 reached end-of-life 2026-04-30.
     #
     # The digest is the index `:latest` named on 2026-09-18: the image built
-    # that day from QuantEcon/actions@3adfcf3 (containers/quantecon-build/),
+    # that day from QuantEcon/actions@195b9f2 (Node 24, QuantEcon/actions#166) (containers/quantecon-build/),
     # amd64 only. The image rebuilds every Monday and its tags move; the digest
     # does not. `container.image` cannot read the `env` context, so the ref is
     # written twice, here and in QE_CONTAINER (which build_info.md prints).
     # Keep the two lines together, and bump them with the Sphinx corpus's pin.
     container:
-      image: ghcr.io/quantecon/quantecon-build@sha256:5d256c23d87fd97e510817724726e4896aed27dfeb23a6d53c58cc476e1cd7b9
+      image: ghcr.io/quantecon/quantecon-build@sha256:937af97c5b9185877cc53cded64d002df6d6ce5e561467931add2a029baada93
     env:
-      QE_CONTAINER: ghcr.io/quantecon/quantecon-build@sha256:5d256c23d87fd97e510817724726e4896aed27dfeb23a6d53c58cc476e1cd7b9
+      QE_CONTAINER: ghcr.io/quantecon/quantecon-build@sha256:937af97c5b9185877cc53cded64d002df6d6ce5e561467931add2a029baada93
     permissions:
       contents: read
       packages: read   # an internal package: the runner pulls it with this job's token
@@ -90,8 +90,9 @@ jobs:
           cat /etc/quantecon-container
           echo "python  $(command -v python)  $(python --version 2>&1)"
           echo "node    $(command -v node)  $(node --version)"
-          # setup-node's Node must win on PATH over the image's own (Node 20):
-          # fail here rather than build the engine on the wrong runtime.
+          # setup-node's Node must be the one on PATH. The image now carries Node
+          # 24 as well (QuantEcon/actions#166), so this guards a regression -- an
+          # image back on an end-of-life Node shadowing the pinned one.
           node --version | grep -q '^v24\.' \
             || { echo "::error::node is $(node --version) at $(command -v node), expected 24 from setup-node"; exit 1; }
           git --version
@@ -132,39 +133,19 @@ jobs:
           echo "myst $v"
           [[ $v == *"($qe)"* ]] || { echo "::error::myst --version prints '$v', but the fork at $QE_MYSTMD_SHA is '$qe'"; exit 1; }
 
-      # TEMPORARY diagnostic (remove once the cause is confirmed): the first
-      # container build failed at HTML export -- the theme's server could not
-      # fetch http://localhost:3100/config.json from myst's content server. Both
-      # servers bind "localhost"; the theme fetches it with a bundled node-fetch
-      # v2. Record how localhost resolves here and reproduce the pattern.
-      - name: Diagnose localhost inside the container
-        continue-on-error: true
-        run: |
-          echo "--- /etc/hosts"; cat /etc/hosts
-          echo "--- getent ahosts localhost"; getent ahosts localhost || true
-          echo "--- IPv6 on loopback (/proc/net/if_inet6)"; cat /proc/net/if_inet6 2>/dev/null || echo "(none)"
-          cat > /tmp/lh.js <<'JS'
-          const dns = require('dns'), http = require('http');
-          dns.lookup('localhost', { all: true }, (e, a) => console.log('lookup all  ', JSON.stringify(a)));
-          dns.lookup('localhost', (e, a, f) => console.log('lookup first', a, 'family', f));
-          const s = http.createServer((q, r) => r.end('ok')).listen(3199, 'localhost', () => {
-            console.log('server bound', JSON.stringify(s.address()));
-            http.get('http://localhost:3199', r => { console.log('http.get localhost ->', r.statusCode); s.close(); })
-                .on('error', e => { console.log('http.get localhost ERROR', e.code, e.address || ''); s.close(); });
-          });
-          JS
-          echo "--- node, default resolution"; node /tmp/lh.js
-          echo "--- node, --dns-result-order=ipv4first"; NODE_OPTIONS=--dns-result-order=ipv4first node /tmp/lh.js
-
       - name: Build HTML (executing the code cells)
         working-directory: lectures
         run: myst build --html --execute
         env:
           BASE_URL: ${{ github.event_name == 'push' && format('/{0}', github.event.repository.name) || '' }}
-          # Both of myst's servers bind "localhost", and the theme reaches the
-          # content server with node-fetch v2. Resolve localhost to 127.0.0.1 in
-          # every Node process (the theme's server inherits the environment), so
-          # the bind and the fetch always agree on one address family.
+          # In this container Node resolves "localhost" to ::1 first, so myst's
+          # content server (bound to "localhost") listens on IPv6 loopback only,
+          # while the theme's bundled node-fetch v2 dials 127.0.0.1 and is refused
+          # -- every page then 404s at HTML export, the theme having swallowed the
+          # error as "No site configuration found". Measured in-container: a
+          # server on "localhost" binds ::1 and http.get(localhost) gets
+          # ECONNREFUSED 127.0.0.1; with IPv4 first it binds 127.0.0.1 and gets 200.
+          # The theme's server inherits the environment, so both sides agree.
           NODE_OPTIONS: --dns-result-order=ipv4first
 
       # myst exits 0 through two failures this container can cause: a Jupyter
