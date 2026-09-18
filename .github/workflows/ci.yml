@@ -14,36 +14,96 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # The fork commit the corpus builds with: main as of 2026-09-10, tagged qe-v10.
+  # The fork commit the corpus builds with: the qe-v11 tag, cut 2026-09-18.
   # Bump deliberately; the tag list is https://github.com/QuantEcon/mystmd/tags.
-  QE_MYSTMD_SHA: c1f274b8a27e150474bf2b70bd120627e1bb31ba
+  QE_MYSTMD_SHA: 83685347ed9e977bb981a0e31a46c98fae6c76fa
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    # The job runs inside the image the Sphinx corpus builds in, pinned by
+    # digest (theme-parity decision D14): the code cells execute in that
+    # image's `quantecon` conda env on both stacks, so the theme is the only
+    # variable a comparison sees move. Nothing here installs a Python package,
+    # so requirements.txt at the repository root is no longer read by CI. Node
+    # is NOT taken from the image: it runs the mystmd engine and the theme's
+    # server, never a code cell, so it is outside what D14 holds constant (the
+    # bench's check-environment reports Node as an engine row). It is pinned to
+    # 24 -- the Active LTS, the version the theme's .nvmrc names, and the one
+    # GitHub's own actions now run on; Node 20 reached end-of-life 2026-04-30.
+    #
+    # The digest is the index `:latest` named on 2026-09-18: the image built
+    # that day from QuantEcon/actions@195b9f2 (Node 24, QuantEcon/actions#166) (containers/quantecon-build/),
+    # amd64 only. The image rebuilds every Monday and its tags move; the digest
+    # does not. `container.image` cannot read the `env` context, so the ref is
+    # written twice, here and in QE_CONTAINER (which build_info.md prints).
+    # Keep the two lines together, and bump them with the Sphinx corpus's pin.
+    container:
+      image: ghcr.io/quantecon/quantecon-build@sha256:937af97c5b9185877cc53cded64d002df6d6ce5e561467931add2a029baada93
+    env:
+      QE_CONTAINER: ghcr.io/quantecon/quantecon-build@sha256:937af97c5b9185877cc53cded64d002df6d6ce5e561467931add2a029baada93
     permissions:
       contents: read
+      packages: read   # an internal package: the runner pulls it with this job's token
       pages: write
       id-token: write
       pull-requests: write
+    defaults:
+      run:
+        # Named, because a container step with no shell runs under `sh -e`
+        # (dash, no pipefail). Not a login shell: the image selects its conda
+        # env through ENV PATH, not `conda init`, so `-l` would add nothing.
+        shell: bash
     steps:
-      - uses: actions/checkout@v5
+      # A backstop, not the fix. In a container job the runner creates the
+      # workspace as uid 1001 while steps run as root, so git refuses the work
+      # tree ("detected dubious ownership") and the git-metadata plugin then
+      # drops every page's "Last changed" history without an error. The image
+      # now trusts every work tree itself (`safe.directory '*'` at system
+      # scope, from QuantEcon/actions#165). This repeats the trust for this
+      # checkout only, in $HOME/.gitconfig (HOME=/github/home, kept across
+      # steps), so an image that loses that line cannot strip the history
+      # silently. The shell's $GITHUB_WORKSPACE is the in-container path; the
+      # github.workspace expression is the host's (actions/runner#2058).
+      - name: Trust the checkout (backstop to the image's own setting)
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0   # the git-metadata plugin reads each page's history
 
-      # Node 24 matches the theme's .nvmrc; the theme runs as a Remix server
-      # during `myst build --html`.
-      - uses: actions/setup-node@v5
+      # `myst build --execute` starts a Jupyter server, and jupyter_server
+      # exits as root unless allow_root is set. myst treats that as a non-fatal
+      # execution error, so without this the build goes green with no executed
+      # output. Set in $HOME, outside the image's env.
+      - name: Let the Jupyter server run as root
+        run: |
+          mkdir -p ~/.jupyter
+          echo '{"ServerApp": {"allow_root": true}}' > ~/.jupyter/jupyter_server_config.json
+
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
-      - uses: oven-sh/setup-bun@v2
 
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-          cache: pip
-      - name: Install the execution kernel
-        run: python -m pip install -r requirements.txt
+      - name: Record the image and its toolchain
+        run: |
+          cat /etc/quantecon-container
+          echo "python  $(command -v python)  $(python --version 2>&1)"
+          echo "node    $(command -v node)  $(node --version)"
+          # setup-node's Node must be the one on PATH. The image now carries Node
+          # 24 as well (QuantEcon/actions#166), so this guards a regression -- an
+          # image back on an end-of-life Node shadowing the pinned one.
+          node --version | grep -q '^v24\.' \
+            || { echo "::error::node is $(node --version) at $(command -v node), expected 24 from setup-node"; exit 1; }
+          git --version
+          python -c 'import ipykernel, jupyter_server; print("ipykernel", ipykernel.__version__, "| jupyter-server", jupyter_server.__version__)'
+          # The image's system-scope entry and this job's backstop, with where each is set.
+          git config --show-origin --get-all safe.directory
+          # myst runs `python -m jupyter_server` with the first python on PATH.
+          test "$(command -v python)" = /opt/conda/envs/quantecon/bin/python \
+            || { echo "::error::python is $(command -v python), not the image's quantecon env"; exit 1; }
+          # Fails here, not silently in the history plugin, if git still refuses.
+          git log -1 --format='checkout %h (%cs)'
 
       - name: Install mystmd (QuantEcon fork, pinned)
         run: |
@@ -52,34 +112,86 @@ jobs:
           git remote add origin https://github.com/QuantEcon/mystmd.git
           git fetch -q --depth 1 origin "$QE_MYSTMD_SHA"
           git checkout -q FETCH_HEAD
+          # The image has no bun, and oven-sh/setup-bun cannot install it here:
+          # it extracts with unzip, which the image lacks. Install the version
+          # the fork declares at this commit with the image's npm, so bun
+          # follows QE_MYSTMD_SHA with no second pin to keep.
+          pm=$(node -p "require('./package.json').packageManager.split('+')[0]")
+          [[ $pm == bun@* ]] || { echo "::error::the fork's packageManager is '$pm', not bun"; exit 1; }
+          npm install -g --no-fund --no-audit "$pm"
+          bun --version
           bun install
           bun run build
           npm install -g /tmp/qe-mystmd/packages/mystmd
-          cat /tmp/qe-mystmd/quantecon/VERSION.yml | head -40
-          myst --version
+          # VERSION.yml opens with a long comment (qe_version is on line 48 at
+          # qe-v11), so print its identifying fields rather than its head.
+          grep -E '^(qe_version|upstream_base|upstream_commit):' quantecon/VERSION.yml
+          # The CLI bakes qe_version in when it is built, so a mismatch means
+          # some other myst is first on PATH.
+          qe=$(sed -n 's/^qe_version: *//p' quantecon/VERSION.yml)
+          v=$(myst --version)
+          echo "myst $v"
+          [[ $v == *"($qe)"* ]] || { echo "::error::myst --version prints '$v', but the fork at $QE_MYSTMD_SHA is '$qe'"; exit 1; }
 
       - name: Build HTML (executing the code cells)
         working-directory: lectures
         run: myst build --html --execute
         env:
           BASE_URL: ${{ github.event_name == 'push' && format('/{0}', github.event.repository.name) || '' }}
+          # In this container Node resolves "localhost" to ::1 first, so myst's
+          # content server (bound to "localhost") listens on IPv6 loopback only,
+          # while the theme's bundled node-fetch v2 dials 127.0.0.1 and is refused
+          # -- every page then 404s at HTML export, the theme having swallowed the
+          # error as "No site configuration found". Measured in-container: a
+          # server on "localhost" binds ::1 and http.get(localhost) gets
+          # ECONNREFUSED 127.0.0.1; with IPv4 first it binds 127.0.0.1 and gets 200.
+          # The theme's server inherits the environment, so both sides agree.
+          NODE_OPTIONS: --dns-result-order=ipv4first
 
-      - uses: actions/upload-pages-artifact@v3
+      # myst exits 0 through two failures this container can cause: a Jupyter
+      # server that will not start leaves every page without outputs, and git
+      # refusing the work tree leaves every page without its "Last changed"
+      # history (the plugin swallows the error). Stop before anything deploys.
+      - name: Check the cells executed and the history was read
+        working-directory: lectures/_build/html
+        run: |
+          py=$(python -c 'import platform; print(platform.python_version())')
+          if ! grep -Eq "Python +${py//./[.]}" build-info/index.html; then
+            echo "::error::build-info shows no output from Python $py: the code cells did not execute in the image's kernel"
+            exit 1
+          fi
+          pages=$(find . -name index.html | wc -l)
+          missing=$(find . -name index.html -exec grep -L '"git_metadata"' {} + || true)
+          if [ -n "$missing" ]; then
+            echo "::error::$(echo "$missing" | wc -l) of $pages pages have no git history (is git refusing the work tree?)"
+            echo "$missing"
+            exit 1
+          fi
+          echo "executed with Python $py; git history on all $pages pages"
+
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: lectures/_build/html
 
       - name: Deploy to GitHub Pages
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
 
+      # Netlify secrets are per-repository and neither is set here yet. The
+      # `secrets` context cannot be read from a step-level `if`, so both are
+      # hoisted into the step's `env` first. The step needs both, so it runs
+      # only when both are present: a missing or rotated token then degrades
+      # to "no preview" rather than a red build, as a missing site id does
+      # (the Sphinx corpus's guard, QuantEcon/test-lecture-theme-sphinx#6).
       - name: Deploy preview to Netlify
-        if: github.event_name == 'pull_request' && env.NETLIFY_SITE_ID != ''
+        if: github.event_name == 'pull_request' && env.NETLIFY_SITE_ID != '' && env.NETLIFY_AUTH_TOKEN != ''
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
         run: |
-          npm install -g netlify-cli
+          npm install -g --no-fund --no-audit netlify-cli
           netlify deploy --dir lectures/_build/html --site "$NETLIFY_SITE_ID" --auth "$NETLIFY_AUTH_TOKEN" \
             --alias "pr-${{ github.event.pull_request.number }}" --json | tee netlify.json
-          echo "preview: $(jq -r .deploy_url netlify.json)" >> "$GITHUB_STEP_SUMMARY"
+          # The image has no jq.
+          echo "preview: $(python -c 'import json; print(json.load(open("netlify.json"))["deploy_url"])')" >> "$GITHUB_STEP_SUMMARY"
