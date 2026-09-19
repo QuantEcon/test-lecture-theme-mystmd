@@ -24,8 +24,8 @@ jobs:
     # The job runs inside the image the Sphinx corpus builds in, pinned by
     # digest (theme-parity decision D14): the code cells execute in that
     # image's `quantecon` conda env on both stacks, so the theme is the only
-    # variable a comparison sees move. Nothing here installs a Python package,
-    # so requirements.txt at the repository root is no longer read by CI. Node
+    # variable a comparison sees move. The one Python package added to the
+    # image is the pinned quantecon in lectures/requirements.txt (below). Node
     # is NOT taken from the image: it runs the mystmd engine and the theme's
     # server, never a code cell, so it is outside what D14 holds constant (the
     # bench's check-environment reports Node as an engine row). It is pinned to

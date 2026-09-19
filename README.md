@@ -2,7 +2,7 @@
 
 *The QuantEcon theme-parity corpus built on the mystmd stack: the same content as [`test-lecture-theme-sphinx`](https://github.com/QuantEcon/test-lecture-theme-sphinx), built with the QuantEcon mystmd fork and `quantecon-theme.mystmd`, so the two renderings can be compared feature by feature.*
 
-Last updated: 2026-09-16
+Last updated: 2026-09-19
 
 > **This is a test repository.** Nothing here is a lecture. Do not link to it from a lecture site.
 
@@ -38,4 +38,4 @@ The code cells execute in the `quantecon` conda environment of the image CI buil
 
 - **`test-lecture-theme-sphinx`** is the source of the content and the reference rendering.
 - **`quantecon-theme.mystmd`** is the theme under test; `tests/visual/fixture/` there is the theme's own small fixture, which this corpus does not replace.
-- **`workspace-themes`** holds the parity project's tracker and plan.
+- **`project-theme-parity`** holds the parity project's tracker (QuantEcon/project-theme-parity#2), its decisions and the measurement passes that compare the two live sites; `workspace-themes` holds the plan that seeded it.
