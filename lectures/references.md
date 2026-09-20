@@ -63,9 +63,11 @@ The `{download}` role offers a file from the repository:
 
 ## The `any` role
 
-Three uses in one series (and its translations) reach a label with the
-`{any}` role: {any}`the section above <a-section-target>`. mystmd reports it
-as an unknown role.
+% lecture-python-programming/debugging.md and oop_intro.md @ b0b0b566: the
+% role always carries an explicit title, as here.
+Three uses in one series (and its translations) reach a label with this role.
+We have met {any}`the section above <a-section-target>` previously.
+mystmd reports `any` as an unknown role.
 
 ## Footnotes
 

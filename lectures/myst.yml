@@ -60,7 +60,10 @@ project:
     - title: Executable Content
       children:
         - file: code_cells.md
+        - file: long_cells.md
         - file: figures.md
+        - file: known_failures.md
+        - file: mystmd_native.md
     - title: Directive Families
       children:
         - file: admonitions.md
