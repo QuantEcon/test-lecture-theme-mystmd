@@ -123,6 +123,34 @@ for i in range(60):
     print(f"line {i:02d} of a long output that should scroll")
 ```
 
+% lecture-python.myst/mix_model.md @ 4f8bcd60: the one `no-execute` tag in the
+% series. It is not a tag either stack knows, so the install cell runs; its
+% companion `hide-output` is what folds the output.
+A cell tagged `no-execute` (one use), which neither stack recognises, written
+as its lecture writes it, beside `hide-output`:
+
+```{code-cell} ipython3
+:tags: [no-execute, hide-output]
+
+print("this cell runs: no-execute is not a tag either stack knows")
+```
+
+% lecture-jax/arellano.md @ 5740d797 (25 uses across lecture-jax,
+% lecture-python.myst and lecture-python-advanced.myst): a jupytext-style cell
+% option, not a tag. It is
+% always `false`, a leftover of the notebook conversion, and must change nothing.
+`hide-output` written as a cell option rather than a tag (25 uses, always
+`false`). The output must show:
+
+```{code-cell} ipython3
+:hide-output: false
+
+def u(c, γ=2.0):
+    return c ** (1 - γ) / (1 - γ)
+
+u(2.0)
+```
+
 The `collapse-20` tag (21 uses in the dynamic-programming lectures) is a
 legacy Jupinx tag with no effect in either stack:
 

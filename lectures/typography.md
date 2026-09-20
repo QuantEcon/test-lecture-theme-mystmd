@@ -141,6 +141,37 @@ Inline HTML passes through the Sphinx build unchanged. A centred line:
 
 <center>This line is wrapped in a `<center>` element.</center>
 
+% lecture-python-programming/getting_started.md @ b0b0b566: the one `<style>`
+% block in the series, written above the page title to size the figures that
+% carry `:figclass: auto`.
+A `<style>` block (one use) defines a class, and a figure picks it up through
+`:figclass:`. The rule must reach the page for the figure below to be 70 per
+cent wide:
+
+<style>
+  .auto {
+    width: 70%;
+    height: auto;
+    }
+</style>
+
+```{figure} /_static/lecture_specific/short_path/graph.png
+:figclass: auto
+
+Sized by the `.auto` rule in the `<style>` block above.
+```
+
+% lecture-python.myst/ak2.md @ 4f8bcd60: the one `<font>` element in the series
+% sits inside an HTML comment, as an editor's note. Nothing may render.
+The only `<font>` element in the lectures is inside an HTML comment, so the
+test is that nothing appears between this paragraph and the next:
+
+<!--
+%<font color='red'>Editor: I tried to edit the following part to describe the fiscal policy %experiment and the objects we are interested in computing. </font>
+-->
+
+The paragraph after the commented-out `<font>` element.
+
 ## Conditional content
 
 The `{only}` directive selects content by builder. The HTML build shows the

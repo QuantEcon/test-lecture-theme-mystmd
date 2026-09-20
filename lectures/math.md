@@ -101,6 +101,37 @@ y_{t+1} & = \rho y_t + \sigma \epsilon_{t+1} \\
 c_t + k_{t+1} = f(k_t)
 \end{equation}
 
+Three environments with a single lecture use each. A bare, numbered `align`
+and a bare `equation*`, the second one set off by `%` comment lines as its
+lecture writes it:
+
+% lecture-python.myst/divergence_measures.md @ 4f8bcd60, shortened.
+\begin{align}
+D_{KL}(f \parallel g) &= \sum_{i} f_i \log\left[\frac{f_i}{g_i}\right] \\
+&= \sum_{i} f_i \log f_i - \sum_{i} f_i \log g_i \\
+&= H(f,g) - H(f)
+\end{align}
+
+% lecture-jax/hopenhayn.md @ 5740d797.
+A stationary recursive equilibrium is a triple
+%
+\begin{equation*}
+    (p, M, \mu) \quad \text{ in } \quad
+    \mathscr E := (0, \infty) \times (0, \infty) \times \mathscr M,
+\end{equation*}
+%
+with $p$ understood as price and $M$ as the mass of entrants.
+
+And `gathered` inside `$$`, which centres each line rather than aligning them:
+
+% lecture-python.myst/two_computation.md @ 4f8bcd60, shortened.
+$$
+\begin{gathered}
+T_t(P)=P+\sigma P C_t\left(I-\sigma C_t^{\prime} P C_t\right)^{-1} C_t^{\prime} P \\
+\mathcal{S}_t(k, P)=\beta_t k-\left(\beta_t / \sigma\right) \log \operatorname{det}\left(I-\sigma C_t^{\prime} P C_t\right)
+\end{gathered}
+$$
+
 ## Macros
 
 The Sphinx theme injects a macro set when `mathjax_path` points at MathJax 3,

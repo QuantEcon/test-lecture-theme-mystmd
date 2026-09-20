@@ -9,8 +9,9 @@ kernelspec:
   name: python3
 ---
 
-% Captured verbatim from QuantEcon/lecture-python-intro lectures/troubleshooting.md @ eb32f13e on 2026-09-16 (CC BY-SA 4.0).
-% Real lecture: do not edit here; re-capture from the source.
+% Captured verbatim by bin/capture from QuantEcon/lecture-python-intro lectures/troubleshooting.md @ b24e855a (2026-09-18), on 2026-09-20 (CC BY-SA 4.0).
+% Real lecture: do not edit here; re-run bin/capture. Recorded in CAPTURES.yml.
+
 
 (troubleshooting)=
 # Troubleshooting
