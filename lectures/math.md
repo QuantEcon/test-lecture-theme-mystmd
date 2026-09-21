@@ -51,6 +51,30 @@ n_t(s^t) + \ell_t(s^t) = 1
 
 The feasibility constraint {eq}`feas1_amss` holds state by state.
 
+### Numbers written as inline maths
+
+% lecture-wasm/geom_series.md @ 669c65fb (the interval) and lecture-python.myst generally (the
+% exponents): about 1,200 of the lectures' 47,000 inline expressions are a number on its own, 61 of
+% them negative. mystmd's inlineMathSimplificationPlugin rewrites those out of the AST -- a bare number
+% becomes plain text, a number with a numeric script a span -- so they are set in the prose face, and a
+% leading minus sign is written as a hyphen (QuantEcon/mystmd#127). MathJax sets them all as maths.
+% This paragraph puts the four cases side by side, for a paired crop (QuantEcon/project-theme-parity#8).
+To start, let $c$ be a real number that lies strictly between $-1$ and $1$; we
+often write this as $c \in (-1, 1)$. A number on its own, $2.5$, and the same
+number inside a formula, $x_1 = 2.5$. A negative number on its own, $-0.5$, and
+inside a formula, $x_2 = -0.5$. A tolerance of $10^{-6}$, and the same power
+inside a formula, $\epsilon = 10^{-6}$.
+
+The same pairs aligned, for a closer look at the digits and the minus sign:
+
+| On its own | Inside a formula |
+| --- | --- |
+| $1$ | $c < 1$ |
+| $-1$ | $c > -1$ |
+| $2.5$ | $x_1 = 2.5$ |
+| $-0.5$ | $x_2 = -0.5$ |
+| $10^{-6}$ | $\epsilon = 10^{-6}$ |
+
 ## Environments
 
 Aligned equations:
