@@ -17,6 +17,13 @@ env:
   # The fork commit the corpus builds with: the qe-v11 tag, cut 2026-09-18.
   # Bump deliberately; the tag list is https://github.com/QuantEcon/mystmd/tags.
   QE_MYSTMD_SHA: 83685347ed9e977bb981a0e31a46c98fae6c76fa
+  # TEMPORARY, for the policy decision QuantEcon/project-theme-parity#19: the
+  # theme commit the /demo/ build below renders with -- the head of the
+  # long-cell tags prototype, QuantEcon/quantecon-theme.mystmd#246. It stays
+  # fetchable through that pull request's head ref after the branch is deleted.
+  # Remove this and the demo step once #19 is decided and the chosen mechanism
+  # ships in a theme release that `site.template` in lectures/myst.yml pins.
+  QE_THEME_DEMO_SHA: e5e492b90e8624a037f736f1631e5e3f432b56af
 
 jobs:
   build:
@@ -181,6 +188,67 @@ jobs:
             exit 1
           fi
           echo "executed with Python $py; git history on all $pages pages"
+
+      # TEMPORARY (QuantEcon/project-theme-parity#19). The site above is the
+      # RELEASED theme, and it is what the parity passes measure; nothing here
+      # touches it. This renders the same sources a second time with the theme
+      # PROTOTYPE that acts on the long-cell tags, the option on, and puts the
+      # result under demo/ of the same Pages artifact, so that
+      #   <site>/demo/long-cells/   sits beside   <sphinx site>/long_cells.html
+      # as two live, operable pages of the same four cells. The second build
+      # re-uses the first one's execution cache under _build/, so it re-renders
+      # and executes nothing again.
+      #
+      # The bundle is assembled as the theme's `make build-theme` does at this
+      # commit, inline because that target needs jq, which the image lacks.
+      - name: Build the long-cells demo with the theme prototype, under /demo/
+        env:
+          BASE_URL: ${{ github.event_name == 'push' && format('/{0}/demo', github.event.repository.name) || '/demo' }}
+          NODE_OPTIONS: --dns-result-order=ipv4first
+        run: |
+          mkdir -p /tmp/qe-theme && cd /tmp/qe-theme
+          git init -q
+          git remote add origin https://github.com/QuantEcon/quantecon-theme.mystmd.git
+          git fetch -q --depth 1 origin "$QE_THEME_DEMO_SHA"
+          git checkout -q FETCH_HEAD
+          npm ci --no-fund --no-audit
+          npm run prod:build
+          bundle=/tmp/qe-theme/.deploy/quantecon-theme
+          version=$(node -p "require('./package.json').version")
+          mkdir -p "$bundle"
+          find template -type f -exec cp {} "$bundle" \;
+          cp -r public build CHANGELOG.md "$bundle"/
+          sed -i "s/VERSION/$version/g" "$bundle/package.json"
+          sed -E "s/^version: .*/version: $version/" template.yml > "$bundle/template.yml"
+          (cd "$bundle" && npm install --no-fund --no-audit)
+          grep -q 'id: long_cell_tags' "$bundle/template.yml" \
+            || { echo "::error::the theme at $QE_THEME_DEMO_SHA does not declare long_cell_tags: not the prototype"; exit 1; }
+
+          cd "$GITHUB_WORKSPACE/lectures"
+          mv _build/html /tmp/site-released
+          cp myst.yml /tmp/myst.released.yml
+          # The demo's two differences from the released site, and nothing else.
+          BUNDLE="$bundle" python - <<'PY'
+          import os, pathlib, re
+          p = pathlib.Path("myst.yml"); s = p.read_text()
+          s, n = re.subn(r"(?m)^  template: \S+$", "  template: " + os.environ["BUNDLE"], s)
+          s, m = re.subn(r"(?m)^  options:\n", "  options:\n    long_cell_tags: true\n", s, count=1)
+          assert (n, m) == (1, 1), f"myst.yml changed shape: template lines {n}, options blocks {m}"
+          p.write_text(s)
+          PY
+          myst build --html --execute
+          cp /tmp/myst.released.yml myst.yml
+
+          # Fail here, not in front of the people deciding, if the prototype did not act.
+          regions=$(grep -o 'qe-\(collapse\|scroll\)--\(input\|output\)' _build/html/long-cells/index.html | sort -u | wc -l)
+          [ "$regions" -eq 4 ] || { echo "::error::demo/long-cells/ shows $regions of the 4 capped regions"; exit 1; }
+          if grep -q 'qe-\(collapse\|scroll\)--' /tmp/site-released/long-cells/index.html; then
+            echo "::error::the released site shows capped regions: the demo leaked into it"; exit 1
+          fi
+          printf '{"theme_repo": "QuantEcon/quantecon-theme.mystmd", "theme_commit": "%s", "option": "long_cell_tags: true", "purpose": "QuantEcon/project-theme-parity#19"}\n' "$QE_THEME_DEMO_SHA" > _build/html/demo-info.json
+          mv _build/html /tmp/site-released/demo
+          mv /tmp/site-released _build/html
+          echo "released site at /, prototype demo at /demo/ ($(find _build/html/demo -name index.html | wc -l) pages)"
 
       - uses: actions/upload-pages-artifact@v5
         with:
