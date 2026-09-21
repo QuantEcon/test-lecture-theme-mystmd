@@ -22,6 +22,18 @@ One page has no Sphinx counterpart. `mystmd_native.md` carries `lecture-wasm`'s 
 
 `lectures/myst.yml` is the hand-written counterpart of the Sphinx `_config.yml` and `_toc.yml`, following the theme's migration checklist (`docs/migrating.md`) and the experimental jb2 build of `lecture-python-programming`.
 
+## The `/demo/` build (temporary)
+
+For the policy decision QuantEcon/project-theme-parity#19 (one reader mechanism for long code inputs and outputs, or two), CI renders the corpus a second time with the theme **prototype** that acts on the long-cell tags (QuantEcon/quantecon-theme.mystmd#246, pinned as `QE_THEME_DEMO_SHA` in `.github/workflows/ci.yml`) and `long_cell_tags: true`, and publishes it under `demo/`:
+
+| | |
+| --- | --- |
+| The site, released theme: what the parity passes measure | https://quantecon.github.io/test-lecture-theme-mystmd/ |
+| The prototype demo | https://quantecon.github.io/test-lecture-theme-mystmd/demo/long-cells/ |
+| The same four cells on the Sphinx stack | https://quantecon.github.io/test-lecture-theme-sphinx/long_cells.html |
+
+The two builds share sources and the execution cache and differ only in `site.template` and that one option; `demo/demo-info.json` records the theme commit. CI fails if the demo page does not show all four capped regions, or if the released site shows any. It goes when #19 is decided and the chosen mechanism ships in a theme release.
+
 ## Building
 
 The engine is the **QuantEcon mystmd fork**, built from a pinned commit (`QE_MYSTMD_SHA` in `.github/workflows/ci.yml`, tag `qe-v11`), not the `mystmd` npm release and not `jupyter-book>=2`. The fork carries the features the lectures depend on ahead of upstream, and the `jupyter-book` 2 package bundles a compiled upstream engine that cannot be swapped. Locally:
