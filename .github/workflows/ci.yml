@@ -14,9 +14,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # The fork commit the corpus builds with: the qe-v11 tag, cut 2026-09-18.
+  # The fork commit the corpus builds with: the qe-v12 tag, cut 2026-09-21.
   # Bump deliberately; the tag list is https://github.com/QuantEcon/mystmd/tags.
-  QE_MYSTMD_SHA: 83685347ed9e977bb981a0e31a46c98fae6c76fa
+  QE_MYSTMD_SHA: 5372608337e9ecb33c160084e75fc5557721e712
   # TEMPORARY, for the policy decision QuantEcon/project-theme-parity#19: the
   # theme commit the /demo/ build below renders with -- the head of the
   # long-cell tags prototype, QuantEcon/quantecon-theme.mystmd#246. It stays
@@ -131,8 +131,8 @@ jobs:
           bun install
           bun run build
           npm install -g /tmp/qe-mystmd/packages/mystmd
-          # VERSION.yml opens with a long comment (qe_version is on line 48 at
-          # qe-v11), so print its identifying fields rather than its head.
+          # VERSION.yml opens with a long comment (qe_version is on line 52 at
+          # qe-v12), so print its identifying fields rather than its head.
           grep -E '^(qe_version|upstream_base|upstream_commit):' quantecon/VERSION.yml
           # The CLI bakes qe_version in when it is built, so a mismatch means
           # some other myst is first on PATH.

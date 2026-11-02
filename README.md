@@ -36,11 +36,11 @@ The two builds share sources and the execution cache and differ only in `site.te
 
 ## Building
 
-The engine is the **QuantEcon mystmd fork**, built from a pinned commit (`QE_MYSTMD_SHA` in `.github/workflows/ci.yml`, tag `qe-v11`), not the `mystmd` npm release and not `jupyter-book>=2`. The fork carries the features the lectures depend on ahead of upstream, and the `jupyter-book` 2 package bundles a compiled upstream engine that cannot be swapped. Locally:
+The engine is the **QuantEcon mystmd fork**, built from a pinned commit (`QE_MYSTMD_SHA` in `.github/workflows/ci.yml`, tag `qe-v12`), not the `mystmd` npm release and not `jupyter-book>=2`. The fork carries the features the lectures depend on ahead of upstream, and the `jupyter-book` 2 package bundles a compiled upstream engine that cannot be swapped. Locally:
 
 ```bash
 git clone --depth 1 https://github.com/QuantEcon/mystmd /tmp/qe-mystmd && cd /tmp/qe-mystmd && bun install && bun run build
-npm install -g /tmp/qe-mystmd/packages/mystmd     # `myst --version` prints v1.10.1 (qe-v11)
+npm install -g /tmp/qe-mystmd/packages/mystmd     # `myst --version` prints v1.10.1 (qe-v12)
 cd lectures && myst build --html --execute
 ```
 
