@@ -63,7 +63,7 @@ Let's start with some examples of linear programming problems.
 
 ## Example 1: production problem
 
-This example was created by {cite}`bertsimas_tsitsiklis1997`.
+This example was created by {cite:p}`bertsimas_tsitsiklis1997`.
 
 Suppose that a factory can produce two goods called Product $1$ and Product $2$.
 
@@ -161,7 +161,7 @@ Our next example has five decision variables, so we will need a systematic compu
 
 ## Example 2: investment problem
 
-We now consider a problem posed and solved by  {cite}`hu_guo2018`.
+We now consider a problem posed and solved by  {cite:p}`hu_guo2018`.
 
 A mutual fund has $ \$ 100,000$ to be invested over a three-year horizon.
 

@@ -49,10 +49,10 @@ the {doc}`figures` page. Equations are referenced with `{eq}`, as in
 ## Citations
 
 Citations use `{cite}` (1,535 uses) with `author_year` reference style:
-{cite}`russell2004history`, {cite}`north1989`. The textual form `{cite:t}`
+{cite:p}`russell2004history`, {cite:p}`north1989`. The textual form `{cite:t}`
 (648 uses, two series) reads as a sentence element -- {cite:t}`keynes1940pay`
 argued for compulsory saving -- and the parenthetical form `{cite:p}` is rare:
-{cite:p}`bryant1984price`. Several keys in one role: {cite}`levitt2019did,Burns_2023`.
+{cite:p}`bryant1984price`. Several keys in one role: {cite:p}`levitt2019did,Burns_2023`.
 Every cited work is listed on the {doc}`zreferences` page by the
 `{bibliography}` directive.
 
@@ -74,7 +74,7 @@ mystmd reports `any` as an unknown role.
 A cross-reference page also carries footnotes[^ref-fn], since the two are
 often confused in a rendering check.
 
-[^ref-fn]: The footnote body, with a citation inside it: {cite}`kuznets1939incomes`.
+[^ref-fn]: The footnote body, with a citation inside it: {cite:p}`kuznets1939incomes`.
 
 ## Index roles
 

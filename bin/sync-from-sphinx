@@ -16,6 +16,13 @@
 #     QuantEcon/workspace-lectures#64 applies the same rename to the lectures).
 #     Only a code cell's options are touched -- a `:tags:` line, or a `tags:`
 #     key and its list items in the cell's `---` YAML block -- never prose.
+#   * the plain-citation rename -- every `{cite}` role becomes `{cite:p}`, so a
+#     citation stays parenthetical as sphinxcontrib-bibtex renders it, where
+#     mystmd would make a plain `{cite}` narrative (theme-parity decision D16,
+#     QuantEcon/project-theme-parity#37; at cutover `myst upgrade` applies the
+#     same rule to the lectures, QuantEcon/mystmd#120). Only role uses in
+#     prose and directive bodies are renamed: never inside a code fence, and
+#     never `{cite}` written as inline code (a backtick before it).
 #
 # Everything else is copied as written, including the constructs the
 # migration project has NOT yet decided (QuantEcon/workspace-lectures#64):
@@ -53,6 +60,23 @@ find "$HERE/lectures.new" -name '*.md' -print0 | xargs -0 perl -i -ne '
   }
   print;
   $opts = 0 if eof;
+'
+# D16: the plain-citation rename, outside code fences and inline code.
+find "$HERE/lectures.new" -name '*.md' -print0 | xargs -0 perl -i -ne '
+  BEGIN { @stack = () }
+  if (/^\s*(`{3,}|~{3,})(.*)$/) {
+    my ($f, $info) = ($1, $2);
+    if (@stack && $info =~ /^\s*$/ && substr($f, 0, 1) eq substr($stack[-1][0], 0, 1) && length($f) >= length($stack[-1][0])) {
+      pop @stack; print; next;
+    }
+    my $code = (@stack && $stack[-1][1])
+      || $info !~ /^\s*\{/
+      || $info =~ /^\s*\{(code-cell|code-block|code|sourcecode|literalinclude|math|raw|eval-rst|csv-table|glue|mermaid)\}/;
+    push @stack, [$f, $code ? 1 : 0]; print; next;
+  }
+  s/(?<![`\w])\{cite\}(?=`[^`]+`)/{cite:p}/g unless @stack && $stack[-1][1];
+  print;
+  @stack = () if eof;
 '
 
 src_sha=$(git -C "$SRC" rev-parse HEAD 2>/dev/null || echo unknown)
