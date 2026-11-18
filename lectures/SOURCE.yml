@@ -3,4 +3,4 @@ source_repo: QuantEcon/test-lecture-theme-sphinx
 source_commit: e1dabe3c65242a04c479b5a1d7ca2f2b327569d6
 rewrite_script: QuantEcon/quantecon-theme.mystmd scripts/rewrite-raw-blocks.mjs
 rewrite_script_commit: 7ffc4c56b6191c66bd35e3170ce6bf2ce1c99b8a
-synced: 2026-11-18T05:10:19Z
+synced: 2026-11-18T05:53:46Z

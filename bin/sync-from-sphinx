@@ -23,6 +23,13 @@
 #     same rule to the lectures, QuantEcon/mystmd#120). Only role uses in
 #     prose and directive bodies are renamed: never inside a code fence, and
 #     never `{cite}` written as inline code (a backtick before it).
+#   * the `:hide-output: false` deletion -- the option is a no-op (the output
+#     shows on both stacks) that the fork warns on, so it is removed from a
+#     code cell's option block, as a `:hide-output:` line or a `hide-output:`
+#     key in the `---` YAML block (QuantEcon/project-theme-parity SYNTAX.md;
+#     `myst upgrade` does the same at cutover, QuantEcon/mystmd#120). Any
+#     other value stops the sync: hiding an output is the `hide-output` tag's
+#     job, and a person decides how to rewrite it.
 #
 # Everything else is copied as written, including the constructs the
 # migration project has NOT yet decided (QuantEcon/workspace-lectures#64):
@@ -77,6 +84,26 @@ find "$HERE/lectures.new" -name '*.md' -print0 | xargs -0 perl -i -ne '
   s/(?<![`\w])\{cite\}(?=`[^`]+`)/{cite:p}/g unless @stack && $stack[-1][1];
   print;
   @stack = () if eof;
+'
+# The `:hide-output: false` deletion, inside code-cell option blocks only. When it was the
+# cell's only option, the blank line that separated the options from the code goes too.
+find "$HERE/lectures.new" -name '*.md' -print0 | xargs -0 perl -i -ne '
+  BEGIN { $opts = 0; $yaml = 0; $kept = 0; $dropblank = 0 }
+  if ($dropblank) { $dropblank = 0; next if /^\s*$/ }
+  if (!$opts && /^\s*(`{3,}|~{3,})\{code-cell\}/) { $opts = 1; $yaml = 0; $kept = 0; print; next }
+  if ($opts) {
+    if (!$yaml && !$kept && /^\s*---\s*$/) { $yaml = 1; print; next }
+    if ($yaml && /^\s*---\s*$/) { $yaml = 0; $opts = 0; print; next }
+    if ($yaml ? /^\s*hide-output:\s*(.*?)\s*$/ : /^\s*:hide-output:\s*(.*?)\s*$/) {
+      die "sync-from-sphinx: $ARGV:$.: hide-output is \"$1\", not false -- rewrite it by hand (a hide-output tag)\n" if $1 ne "false";
+      $dropblank = 1 if !$yaml && !$kept;
+      next;
+    }
+    if ($yaml || /^\s*:[\w-]+:/) { $kept = 1; print; next }
+    $opts = 0;
+  }
+  print;
+  if (eof) { $opts = 0; $yaml = 0; $kept = 0; $dropblank = 0; close ARGV }
 '
 
 src_sha=$(git -C "$SRC" rev-parse HEAD 2>/dev/null || echo unknown)
