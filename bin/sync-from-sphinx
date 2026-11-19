@@ -25,11 +25,17 @@
 #     never `{cite}` written as inline code (a backtick before it).
 #   * the `:hide-output: false` deletion -- the option is a no-op (the output
 #     shows on both stacks) that the fork warns on, so it is removed from a
-#     code cell's option block, as a `:hide-output:` line or a `hide-output:`
-#     key in the `---` YAML block (QuantEcon/project-theme-parity SYNTAX.md;
-#     `myst upgrade` does the same at cutover, QuantEcon/mystmd#120). Any
-#     other value stops the sync: hiding an output is the `hide-output` tag's
-#     job, and a person decides how to rewrite it.
+#     code cell's option block, as a `:hide-output:` line or a top-level
+#     `hide-output:` key in the `---` YAML block, when its value is an
+#     unquoted YAML false: `false`, `False` or `FALSE` (in the YAML block, a
+#     trailing `# comment` is allowed). An option block left empty goes too,
+#     with its `---` delimiters and the blank line below it. This is the rule
+#     `myst upgrade` applies at cutover (decision D4 of the `myst upgrade`
+#     work, implemented in QuantEcon/mystmd#152 for QuantEcon/mystmd#120;
+#     QuantEcon/project-theme-parity SYNTAX.md). Any other value, `true`, a
+#     quoted 'false' or an empty one included, stops the sync: hiding an
+#     output is the `hide-output` tag's job, and a person decides how to
+#     rewrite it.
 #
 # Everything else is copied as written, including the constructs the
 # migration project has NOT yet decided (QuantEcon/workspace-lectures#64):
@@ -85,25 +91,60 @@ find "$HERE/lectures.new" -name '*.md' -print0 | xargs -0 perl -i -ne '
   print;
   @stack = () if eof;
 '
-# The `:hide-output: false` deletion, inside code-cell option blocks only. When it was the
-# cell's only option, the blank line that separated the options from the code goes too.
+# The `:hide-output: false` deletion, inside code-cell option blocks only, as
+# QuantEcon/mystmd#152 implements it. A cell's option block -- the `:key:` lines
+# straight after the opening fence, or a `---` YAML block that opens there and
+# closes before the cell does -- is held until it ends, then written back
+# without its unquoted-false `hide-output` entries. When no option is left, the
+# whole block goes, with its `---` delimiters, and so does the blank line that
+# separated it from the code.
 find "$HERE/lectures.new" -name '*.md' -print0 | xargs -0 perl -i -ne '
-  BEGIN { $opts = 0; $yaml = 0; $kept = 0; $dropblank = 0 }
-  if ($dropblank) { $dropblank = 0; next if /^\s*$/ }
-  if (!$opts && /^\s*(`{3,}|~{3,})\{code-cell\}/) { $opts = 1; $yaml = 0; $kept = 0; print; next }
-  if ($opts) {
-    if (!$yaml && !$kept && /^\s*---\s*$/) { $yaml = 1; print; next }
-    if ($yaml && /^\s*---\s*$/) { $yaml = 0; $opts = 0; print; next }
-    if ($yaml ? /^\s*hide-output:\s*(.*?)\s*$/ : /^\s*:hide-output:\s*(.*?)\s*$/) {
-      die "sync-from-sphinx: $ARGV:$.: hide-output is \"$1\", not false -- rewrite it by hand (a hide-output tag)\n" if $1 ne "false";
-      $dropblank = 1 if !$yaml && !$kept;
-      next;
+  BEGIN { $opts = 0; $yaml = 0; @buf = (); $fence = ""; $dropblank = 0 }
+  sub spill { print $_->[1] for @buf; @buf = (); $opts = 0; $yaml = 0 }
+  sub flush {
+    my @lines = $yaml ? @buf[1 .. $#buf - 1] : @buf;
+    my (%drop, $top);
+    for (@lines) {
+      my ($n, $t) = @$_;
+      my ($key, $value);
+      if ($yaml) {
+        # only a top-level key counts; a comment, or a line nested under a key, does not
+        next if $t !~ /\S/ || $t =~ /^\s*#/;
+        my $indent = length(($t =~ /^(\s*)/)[0]);
+        $top //= $indent;
+        next unless $indent == $top && $t =~ /^\s*([\w-]+):(?:\s+(.*?))?\s*$/;
+        ($key, $value) = ($1, $2 // "");
+        $value =~ s/\s+#.*$//;
+      } else {
+        next unless $t =~ /^\s*:([\w-]+):(?:\s+(.*?))?\s*$/;
+        ($key, $value) = ($1, $2 // "");
+      }
+      next unless $key eq "hide-output";
+      die "sync-from-sphinx: $ARGV:$n: hide-output is \"$value\", not false -- rewrite it by hand (a hide-output tag)\n"
+        unless $value =~ /^(?:false|False|FALSE)$/;
+      $drop{$n} = 1;
     }
-    if ($yaml || /^\s*:[\w-]+:/) { $kept = 1; print; next }
-    $opts = 0;
+    if (%drop && !grep { !$drop{$_->[0]} && $_->[1] =~ /\S/ && $_->[1] !~ /^\s*#/ } @lines) {
+      @buf = (); $opts = 0; $yaml = 0; $dropblank = 1;
+    } else {
+      @buf = grep { !$drop{$_->[0]} } @buf; spill();
+    }
   }
-  print;
-  if (eof) { $opts = 0; $yaml = 0; $kept = 0; $dropblank = 0; close ARGV }
+  {
+    if ($opts && $yaml) {
+      # the cell closes before the YAML block does: those lines are code, not options
+      if (/^\s*(`{3,}|~{3,})\s*$/ && substr($1, 0, 1) eq substr($fence, 0, 1) && length($1) >= length($fence)) { spill() }
+      else { push @buf, [$., $_]; flush() if /^\s*---\s*$/; last }
+    } elsif ($opts) {
+      if (!@buf && /^\s*---\s*$/) { $yaml = 1; push @buf, [$., $_]; last }
+      if (/^\s*:[\w-]+:/) { push @buf, [$., $_]; last }
+      flush();
+    }
+    if ($dropblank) { $dropblank = 0; last if /^\s*$/ }
+    if (/^\s*(`{3,}|~{3,})\{code-cell\}/) { $opts = 1; $yaml = 0; @buf = (); $fence = $1 }
+    print;
+  }
+  if (eof) { if ($opts) { $yaml ? spill() : flush() } $dropblank = 0; close ARGV }
 '
 
 src_sha=$(git -C "$SRC" rev-parse HEAD 2>/dev/null || echo unknown)
