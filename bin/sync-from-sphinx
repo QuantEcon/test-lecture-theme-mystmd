@@ -97,30 +97,33 @@ find "$HERE/lectures.new" -name '*.md' -print0 | xargs -0 perl -i -ne '
 # closes before the cell does -- is held until it ends, then written back
 # without its unquoted-false `hide-output` entries. When no option is left, the
 # whole block goes, with its `---` delimiters, and so does the blank line that
-# separated it from the code.
+# separated it from the code. Fences are tracked as a stack, as in the `{cite}`
+# rule, so a code cell shown inside a code fence (a ````md example, say) is
+# left alone, where one inside a directive such as `{note}` is not.
 find "$HERE/lectures.new" -name '*.md' -print0 | xargs -0 perl -i -ne '
-  BEGIN { $opts = 0; $yaml = 0; @buf = (); $fence = ""; $dropblank = 0 }
+  BEGIN { $opts = 0; $yaml = 0; @buf = (); @stack = (); $dropblank = 0 }
   sub spill { print $_->[1] for @buf; @buf = (); $opts = 0; $yaml = 0 }
   sub flush {
     my @lines = $yaml ? @buf[1 .. $#buf - 1] : @buf;
     my (%drop, $top);
     for (@lines) {
       my ($n, $t) = @$_;
-      my ($key, $value);
+      my ($key, $raw, $value);
       if ($yaml) {
         # only a top-level key counts; a comment, or a line nested under a key, does not
         next if $t !~ /\S/ || $t =~ /^\s*#/;
         my $indent = length(($t =~ /^(\s*)/)[0]);
         $top //= $indent;
         next unless $indent == $top && $t =~ /^\s*([\w-]+):(?:\s+(.*?))?\s*$/;
-        ($key, $value) = ($1, $2 // "");
-        $value =~ s/\s+#.*$//;
+        ($key, $raw) = ($1, $2 // "");
+        ($value = $raw) =~ s/\s+#.*$//;
       } else {
         next unless $t =~ /^\s*:([\w-]+):(?:\s+(.*?))?\s*$/;
-        ($key, $value) = ($1, $2 // "");
+        ($key, $raw) = ($1, $2 // "");
+        $value = $raw;
       }
       next unless $key eq "hide-output";
-      die "sync-from-sphinx: $ARGV:$n: hide-output is \"$value\", not false -- rewrite it by hand (a hide-output tag)\n"
+      die "sync-from-sphinx: $ARGV:$n: hide-output is \"$raw\", not false -- rewrite it by hand (a hide-output tag)\n"
         unless $value =~ /^(?:false|False|FALSE)$/;
       $drop{$n} = 1;
     }
@@ -133,7 +136,7 @@ find "$HERE/lectures.new" -name '*.md' -print0 | xargs -0 perl -i -ne '
   {
     if ($opts && $yaml) {
       # the cell closes before the YAML block does: those lines are code, not options
-      if (/^\s*(`{3,}|~{3,})\s*$/ && substr($1, 0, 1) eq substr($fence, 0, 1) && length($1) >= length($fence)) { spill() }
+      if (/^\s*(`{3,}|~{3,})\s*$/ && substr($1, 0, 1) eq substr($stack[-1][0], 0, 1) && length($1) >= length($stack[-1][0])) { spill() }
       else { push @buf, [$., $_]; flush() if /^\s*---\s*$/; last }
     } elsif ($opts) {
       if (!@buf && /^\s*---\s*$/) { $yaml = 1; push @buf, [$., $_]; last }
@@ -141,10 +144,22 @@ find "$HERE/lectures.new" -name '*.md' -print0 | xargs -0 perl -i -ne '
       flush();
     }
     if ($dropblank) { $dropblank = 0; last if /^\s*$/ }
-    if (/^\s*(`{3,}|~{3,})\{code-cell\}/) { $opts = 1; $yaml = 0; @buf = (); $fence = $1 }
+    if (/^\s*(`{3,}|~{3,})(.*)$/) {
+      my ($f, $info) = ($1, $2);
+      if (@stack && $info =~ /^\s*$/ && substr($f, 0, 1) eq substr($stack[-1][0], 0, 1) && length($f) >= length($stack[-1][0])) {
+        pop @stack;
+      } else {
+        my $incode = @stack && $stack[-1][1];
+        my $code = $incode
+          || $info !~ /^\s*\{/
+          || $info =~ /^\s*\{(code-cell|code-block|code|sourcecode|literalinclude|math|raw|eval-rst|csv-table|glue|mermaid)\}/;
+        if (!$incode && $info =~ /^\s*\{code-cell\}/) { $opts = 1; $yaml = 0; @buf = () }
+        push @stack, [$f, $code ? 1 : 0];
+      }
+    }
     print;
   }
-  if (eof) { if ($opts) { $yaml ? spill() : flush() } $dropblank = 0; close ARGV }
+  if (eof) { if ($opts) { $yaml ? spill() : flush() } $dropblank = 0; @stack = (); close ARGV }
 '
 
 src_sha=$(git -C "$SRC" rev-parse HEAD 2>/dev/null || echo unknown)
