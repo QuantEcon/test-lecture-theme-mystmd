@@ -32,7 +32,7 @@ One page has no Sphinx counterpart. `mystmd_native.md` carries `lecture-wasm`'s 
 The engine is the **QuantEcon mystmd fork**, built from a pinned commit (`QE_MYSTMD_SHA` in `.github/workflows/ci.yml`, tag `qe-v15`), not the `mystmd` npm release and not `jupyter-book>=2`. The fork carries the features the lectures depend on ahead of upstream, and the `jupyter-book` 2 package bundles a compiled upstream engine that cannot be swapped. Locally:
 
 ```bash
-git clone --depth 1 https://github.com/QuantEcon/mystmd /tmp/qe-mystmd && cd /tmp/qe-mystmd && bun install && bun run build
+git clone --depth 1 --branch qe-v15 https://github.com/QuantEcon/mystmd /tmp/qe-mystmd && cd /tmp/qe-mystmd && bun install && bun run build
 npm install -g /tmp/qe-mystmd/packages/mystmd     # `myst --version` prints v1.13.0 (qe-v15)
 cd lectures && myst build --html --execute
 ```
