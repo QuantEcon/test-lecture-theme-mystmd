@@ -16,6 +16,26 @@
 #     QuantEcon/workspace-lectures#64 applies the same rename to the lectures).
 #     Only a code cell's options are touched -- a `:tags:` line, or a `tags:`
 #     key and its list items in the cell's `---` YAML block -- never prose.
+#   * the plain-citation rename -- every `{cite}` role becomes `{cite:p}`, so a
+#     citation stays parenthetical as sphinxcontrib-bibtex renders it, where
+#     mystmd would make a plain `{cite}` narrative (theme-parity decision D16,
+#     QuantEcon/project-theme-parity#37; at cutover `myst upgrade` applies the
+#     same rule to the lectures, QuantEcon/mystmd#120). Only role uses in
+#     prose and directive bodies are renamed: never inside a code fence, and
+#     never `{cite}` written as inline code (a backtick before it).
+#   * the `:hide-output: false` deletion -- the option is a no-op (the output
+#     shows on both stacks) that the fork warns on, so it is removed from a
+#     code cell's option block, as a `:hide-output:` line or a top-level
+#     `hide-output:` key in the `---` YAML block, when its value is an
+#     unquoted YAML false: `false`, `False` or `FALSE` (in the YAML block, a
+#     trailing `# comment` is allowed). An option block left empty goes too,
+#     with its `---` delimiters and the blank line below it. This is the rule
+#     `myst upgrade` applies at cutover (decision D4 of the `myst upgrade`
+#     work, implemented in QuantEcon/mystmd#152 for QuantEcon/mystmd#120;
+#     QuantEcon/project-theme-parity SYNTAX.md). Any other value, `true`, a
+#     quoted 'false' or an empty one included, stops the sync: hiding an
+#     output is the `hide-output` tag's job, and a person decides how to
+#     rewrite it.
 #
 # Everything else is copied as written, including the constructs the
 # migration project has NOT yet decided (QuantEcon/workspace-lectures#64):
@@ -53,6 +73,93 @@ find "$HERE/lectures.new" -name '*.md' -print0 | xargs -0 perl -i -ne '
   }
   print;
   $opts = 0 if eof;
+'
+# D16: the plain-citation rename, outside code fences and inline code.
+find "$HERE/lectures.new" -name '*.md' -print0 | xargs -0 perl -i -ne '
+  BEGIN { @stack = () }
+  if (/^\s*(`{3,}|~{3,})(.*)$/) {
+    my ($f, $info) = ($1, $2);
+    if (@stack && $info =~ /^\s*$/ && substr($f, 0, 1) eq substr($stack[-1][0], 0, 1) && length($f) >= length($stack[-1][0])) {
+      pop @stack; print; next;
+    }
+    my $code = (@stack && $stack[-1][1])
+      || $info !~ /^\s*\{/
+      || $info =~ /^\s*\{(code-cell|code-block|code|sourcecode|literalinclude|math|raw|eval-rst|csv-table|glue|mermaid)\}/;
+    push @stack, [$f, $code ? 1 : 0]; print; next;
+  }
+  s/(?<![`\w])\{cite\}(?=`[^`]+`)/{cite:p}/g unless @stack && $stack[-1][1];
+  print;
+  @stack = () if eof;
+'
+# The `:hide-output: false` deletion, inside code-cell option blocks only, as
+# QuantEcon/mystmd#152 implements it. A cell's option block -- the `:key:` lines
+# straight after the opening fence, or a `---` YAML block that opens there and
+# closes before the cell does -- is held until it ends, then written back
+# without its unquoted-false `hide-output` entries. When no option is left, the
+# whole block goes, with its `---` delimiters, and so does the blank line that
+# separated it from the code. Fences are tracked as a stack, as in the `{cite}`
+# rule, so a code cell shown inside a code fence (a ````md example, say) is
+# left alone, where one inside a directive such as `{note}` is not.
+find "$HERE/lectures.new" -name '*.md' -print0 | xargs -0 perl -i -ne '
+  BEGIN { $opts = 0; $yaml = 0; @buf = (); @stack = (); $dropblank = 0 }
+  sub spill { print $_->[1] for @buf; @buf = (); $opts = 0; $yaml = 0 }
+  sub flush {
+    my @lines = $yaml ? @buf[1 .. $#buf - 1] : @buf;
+    my (%drop, $top);
+    for (@lines) {
+      my ($n, $t) = @$_;
+      my ($key, $raw, $value);
+      if ($yaml) {
+        # only a top-level key counts; a comment, or a line nested under a key, does not
+        next if $t !~ /\S/ || $t =~ /^\s*#/;
+        my $indent = length(($t =~ /^(\s*)/)[0]);
+        $top //= $indent;
+        next unless $indent == $top && $t =~ /^\s*([\w-]+):(?:\s+(.*?))?\s*$/;
+        ($key, $raw) = ($1, $2 // "");
+        ($value = $raw) =~ s/\s+#.*$//;
+      } else {
+        next unless $t =~ /^\s*:([\w-]+):(?:\s+(.*?))?\s*$/;
+        ($key, $raw) = ($1, $2 // "");
+        $value = $raw;
+      }
+      next unless $key eq "hide-output";
+      die "sync-from-sphinx: $ARGV:$n: hide-output is \"$raw\", not false -- rewrite it by hand (a hide-output tag)\n"
+        unless $value =~ /^(?:false|False|FALSE)$/;
+      $drop{$n} = 1;
+    }
+    if (%drop && !grep { !$drop{$_->[0]} && $_->[1] =~ /\S/ && $_->[1] !~ /^\s*#/ } @lines) {
+      @buf = (); $opts = 0; $yaml = 0; $dropblank = 1;
+    } else {
+      @buf = grep { !$drop{$_->[0]} } @buf; spill();
+    }
+  }
+  {
+    if ($opts && $yaml) {
+      # the cell closes before the YAML block does: those lines are code, not options
+      if (/^\s*(`{3,}|~{3,})\s*$/ && substr($1, 0, 1) eq substr($stack[-1][0], 0, 1) && length($1) >= length($stack[-1][0])) { spill() }
+      else { push @buf, [$., $_]; flush() if /^\s*---\s*$/; last }
+    } elsif ($opts) {
+      if (!@buf && /^\s*---\s*$/) { $yaml = 1; push @buf, [$., $_]; last }
+      if (/^\s*:[\w-]+:/) { push @buf, [$., $_]; last }
+      flush();
+    }
+    if ($dropblank) { $dropblank = 0; last if /^\s*$/ }
+    if (/^\s*(`{3,}|~{3,})(.*)$/) {
+      my ($f, $info) = ($1, $2);
+      if (@stack && $info =~ /^\s*$/ && substr($f, 0, 1) eq substr($stack[-1][0], 0, 1) && length($f) >= length($stack[-1][0])) {
+        pop @stack;
+      } else {
+        my $incode = @stack && $stack[-1][1];
+        my $code = $incode
+          || $info !~ /^\s*\{/
+          || $info =~ /^\s*\{(code-cell|code-block|code|sourcecode|literalinclude|math|raw|eval-rst|csv-table|glue|mermaid)\}/;
+        if (!$incode && $info =~ /^\s*\{code-cell\}/) { $opts = 1; $yaml = 0; @buf = () }
+        push @stack, [$f, $code ? 1 : 0];
+      }
+    }
+    print;
+  }
+  if (eof) { if ($opts) { $yaml ? spill() : flush() } $dropblank = 0; @stack = (); close ARGV }
 '
 
 src_sha=$(git -C "$SRC" rev-parse HEAD 2>/dev/null || echo unknown)

@@ -143,8 +143,6 @@ print("this cell runs: no-execute is not a tag either stack knows")
 `false`). The output must show:
 
 ```{code-cell} ipython3
-:hide-output: false
-
 def u(c, γ=2.0):
     return c ** (1 - γ) / (1 - γ)
 
