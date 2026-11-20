@@ -14,9 +14,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # The fork commit the corpus builds with: the qe-v14 tag, cut 2026-11-04.
+  # The fork commit the corpus builds with: the qe-v15 tag, cut 2026-11-19.
   # Bump deliberately; the tag list is https://github.com/QuantEcon/mystmd/tags.
-  QE_MYSTMD_SHA: 8be13b7368c57a534d91a0513b7691e57bd591af
+  QE_MYSTMD_SHA: 39cda142a43f7a8a96459d8d667e7c43a1853fa5
 
 jobs:
   build:
@@ -124,8 +124,8 @@ jobs:
           bun install
           bun run build
           npm install -g /tmp/qe-mystmd/packages/mystmd
-          # VERSION.yml opens with a long comment (qe_version is on line 52 at
-          # qe-v14), so print its identifying fields rather than its head.
+          # VERSION.yml opens with a long comment (qe_version is on line 53 at
+          # qe-v15), so print its identifying fields rather than its head.
           grep -E '^(qe_version|upstream_base|upstream_commit):' quantecon/VERSION.yml
           # The CLI bakes qe_version in when it is built, so a mismatch means
           # some other myst is first on PATH.
