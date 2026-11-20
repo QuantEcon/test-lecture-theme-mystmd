@@ -29,17 +29,17 @@ One page has no Sphinx counterpart. `mystmd_native.md` carries `lecture-wasm`'s 
 
 ## Building
 
-The engine is the **QuantEcon mystmd fork**, built from a pinned commit (`QE_MYSTMD_SHA` in `.github/workflows/ci.yml`, tag `qe-v14`), not the `mystmd` npm release and not `jupyter-book>=2`. The fork carries the features the lectures depend on ahead of upstream, and the `jupyter-book` 2 package bundles a compiled upstream engine that cannot be swapped. Locally:
+The engine is the **QuantEcon mystmd fork**, built from a pinned commit (`QE_MYSTMD_SHA` in `.github/workflows/ci.yml`, tag `qe-v15`), not the `mystmd` npm release and not `jupyter-book>=2`. The fork carries the features the lectures depend on ahead of upstream, and the `jupyter-book` 2 package bundles a compiled upstream engine that cannot be swapped. Locally:
 
 ```bash
 git clone --depth 1 https://github.com/QuantEcon/mystmd /tmp/qe-mystmd && cd /tmp/qe-mystmd && bun install && bun run build
-npm install -g /tmp/qe-mystmd/packages/mystmd     # `myst --version` prints v1.12.0 (qe-v14)
+npm install -g /tmp/qe-mystmd/packages/mystmd     # `myst --version` prints v1.13.0 (qe-v15)
 cd lectures && myst build --html --execute
 ```
 
 The code cells execute in the `quantecon` conda environment of the image CI builds in — `ghcr.io/quantecon/quantecon-build`, pinned by digest in `.github/workflows/ci.yml` — the same image the Sphinx corpus uses, so the two corpora run one kernel (theme-parity decision D14). Locally, build inside that image, or create the environment from `containers/quantecon-build/environment.yml` in QuantEcon/actions. Node 24 runs the engine.
 
-`myst start` serves the site with hot reload. The theme is a pinned release zip (`site.template` in `myst.yml`, v3.2.0, which renders `collapse-N` and `collapse-output-N` behind an Expand / Collapse bar); the git-history header needs a full-depth checkout.
+`myst start` serves the site with hot reload. The theme is a pinned release zip (`site.template` in `myst.yml`, v3.2.1, which renders `collapse-N` and `collapse-output-N` behind an Expand / Collapse bar); the git-history header needs a full-depth checkout.
 
 ## Relationship to other repositories
 
