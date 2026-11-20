@@ -18,7 +18,8 @@ kernelspec:
 % Patterns from lecture-python.myst (note, 158 uses), lecture-dp/ifp_advanced.md
 % (include of _admonition/gpu.md), lecture-python-intro/inequality.md (seealso),
 % lecture-python-programming (hint dropdown) and lecture-python.myst/qr_decomp.md
-% (todo). Notes are by far the most common: 380 across every series.
+% (todo), and lecture-python.myst/social_security_depletion.md (important, one use
+% since 2026-11). Notes are by far the most common: 380 across every series.
 
 ## The built-in kinds
 
@@ -40,6 +41,12 @@ A warning (three uses, one series).
 
 ```{tip}
 A tip (four uses).
+```
+
+```{important}
+An important admonition (one use, `lecture-python.myst/social_security_depletion.md`): $\Phi$ is a **decreasing** map.
+
+Its body carries several paragraphs, *emphasis* and inline maths, as the lecture's does.
 ```
 
 ```{hint}

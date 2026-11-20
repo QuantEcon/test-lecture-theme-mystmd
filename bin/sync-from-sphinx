@@ -10,10 +10,16 @@
 #     Data iframe becomes `{iframe}`, span tables are unfenced
 #     (QuantEcon/quantecon-theme.mystmd#204; scripts/rewrite-raw-blocks.mjs
 #     in the theme repository, pinned by the checkout you pass).
+#   * the long-output rename -- every `output_scroll` and `scroll-output` tag
+#     on a code cell becomes `collapse-output-24`, one for one (theme-parity
+#     decision D15, QuantEcon/project-theme-parity#19; the cutover tooling of
+#     QuantEcon/workspace-lectures#64 applies the same rename to the lectures).
+#     Only a code cell's options are touched -- a `:tags:` line, or a `tags:`
+#     key and its list items in the cell's `---` YAML block -- never prose.
 #
 # Everything else is copied as written, including the constructs the
 # migration project has NOT yet decided (QuantEcon/workspace-lectures#64):
-# `{only}`, `{youtube}`, `{glue:figure}`, `{nb-exec-table}`, the scroll tags,
+# `{only}`, `{youtube}`, `{glue:figure}`, `{nb-exec-table}`, `scroll-input`,
 # `{prf:Theorem}`, `{any}` and `{todo}`. They stay so that the mystmd build
 # shows what each one does today; a decision adds a rule here.
 #
@@ -30,6 +36,24 @@ HERE="$(cd "$(dirname "$0")/.." && pwd)"
 rm -rf "$HERE/lectures.new"; mkdir -p "$HERE/lectures.new"
 tar -C "$SRC/lectures" --exclude=./_build --exclude=./_config.yml --exclude=./_toc.yml --exclude=./_static/includes -cf - . | tar -C "$HERE/lectures.new" -xf -
 node "$THEME/scripts/rewrite-raw-blocks.mjs" "$HERE/lectures.new"
+# D15: the long-output rename, inside code-cell option blocks only.
+find "$HERE/lectures.new" -name '*.md' -print0 | xargs -0 perl -i -ne '
+  BEGIN { $opts = 0; $yaml = 0; $intags = 0 }
+  if (!$opts && /^\s*(`{3,}|~{3,})\{code-cell\}/) { $opts = 1; $yaml = 0; $intags = 0; print; next }
+  if ($opts) {
+    if (!$yaml && /^\s*---\s*$/) { $yaml = 1; print; next }
+    if ($yaml && /^\s*---\s*$/) { $yaml = 0; $opts = 0; print; next }
+    if ($yaml || /^\s*:[\w-]+:/) {
+      if (/^\s*:?tags:?/) { s/(?<![\w-])(?:output_scroll|scroll-output)(?![\w-])/collapse-output-24/g; $intags = $yaml && /^\s*tags:\s*$/ ? 1 : 0 }
+      elsif ($intags && /^\s*-\s/) { s/(?<![\w-])(?:output_scroll|scroll-output)(?![\w-])/collapse-output-24/g }
+      else { $intags = 0 }
+      print; next
+    }
+    $opts = 0; $intags = 0;
+  }
+  print;
+  $opts = 0 if eof;
+'
 
 src_sha=$(git -C "$SRC" rev-parse HEAD 2>/dev/null || echo unknown)
 theme_sha=$(git -C "$THEME" rev-parse HEAD 2>/dev/null || echo unknown)

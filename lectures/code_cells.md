@@ -112,13 +112,13 @@ Long output with the two scroll tags in use, `output_scroll` (myst-nb) and
 `scroll-output` (its Jupyter Book 1 spelling):
 
 ```{code-cell} ipython3
-:tags: [output_scroll]
+:tags: [collapse-output-24]
 for i in range(60):
     print(f"line {i:02d} of a long output that should scroll")
 ```
 
 ```{code-cell} ipython3
-:tags: [scroll-output]
+:tags: [collapse-output-24]
 for i in range(60):
     print(f"line {i:02d} of a long output that should scroll")
 ```

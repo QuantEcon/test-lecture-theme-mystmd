@@ -17,7 +17,8 @@ kernelspec:
 
 % Patterns from continuous_time_mcs (theorem, lemma, proof, algorithm),
 % lecture-python-intro/inequality.md (definition, example),
-% lecture-python-advanced.myst (proposition, assumption, corollary) and
+% lecture-python-advanced.myst (proposition, assumption, corollary; the unnumbered
+% `:nonumber:` proposition from financial_structure_incentives.md) and
 % lecture-python-intro/eigen_II.md (the capitalised prf:Theorem).
 % 253 `prf:*` blocks across seven kinds; 253 `{prf:ref}` roles.
 
@@ -75,6 +76,16 @@ If $\beta \in (0, 1)$ then $T$ is a contraction of modulus $\beta$.
 :label: prop-self-generation
 
 Every self-generating set is a subset of the equilibrium value set.
+```
+
+An unnumbered proposition, with a label (four uses, all in
+`lecture-python-advanced.myst/financial_structure_incentives.md`):
+
+```{prf:proposition} Underinvestment
+:label: prop-underinvestment
+:nonumber:
+
+The firm invests less than the first-best level whenever debt is risky.
 ```
 
 ```{prf:assumption} Preferences

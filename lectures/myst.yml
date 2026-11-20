@@ -22,7 +22,7 @@ project:
     - _static/quant-econ.bib
   # The theme's git history header needs this plugin and a full-depth checkout.
   plugins:
-    - https://raw.githubusercontent.com/QuantEcon/quantecon-theme.mystmd/v3.1.0/plugins/git-metadata.mjs
+    - https://raw.githubusercontent.com/QuantEcon/quantecon-theme.mystmd/v3.2.0/plugins/git-metadata.mjs
   # The macro set the Sphinx theme injects plus this corpus's own additions
   # (see math.md); KaTeX gets only what is declared here. MathJax's
   # [definition, nargs] array form is not accepted -- strings only.
@@ -83,7 +83,7 @@ project:
     - _admonition/gpu.md
 site:
   # Pinned theme release; bump the vX.Y.Z to take a new theme.
-  template: https://github.com/QuantEcon/quantecon-theme.mystmd/releases/download/v3.1.0/quantecon-theme.zip
+  template: https://github.com/QuantEcon/quantecon-theme.mystmd/releases/download/v3.2.0/quantecon-theme.zip
   options:
     site_url: https://quantecon.github.io/test-lecture-theme-mystmd/
     twitter: quantecon

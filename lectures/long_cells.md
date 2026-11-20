@@ -183,7 +183,7 @@ linear_interp_1d(grid, get_grid_nodes(grid) ** 2, np.array([0.3]))
 The tag in use today. The output should be capped at 24 em with a scrollbar.
 
 ```{code-cell} ipython3
-:tags: [scroll-output]
+:tags: [collapse-output-24]
 
 for i in range(60):
     print(f"line {i:02d} of a long output: f({i / 59:.3f}) = "
