@@ -36,6 +36,16 @@
 #     quoted 'false' or an empty one included, stops the sync: hiding an
 #     output is the `hide-output` tag's job, and a person decides how to
 #     rewrite it.
+#   * the `{contents}` depth rewrite -- `:depth: 2` on a `{contents}` directive
+#     becomes `:depth: 1` (decided 2026-11-22, mmcky; QuantEcon/project-theme-parity
+#     SYNTAX.md, "Contents depth"; a `myst upgrade` rule, QuantEcon/mystmd#120).
+#     Docutils counts the page title as level 1, so at depth 2 the Sphinx box
+#     lists the title with the H2s under it, where mystmd counts from the first
+#     heading after the directive and would list the H2s and the H3s; depth 1
+#     lists the H2s. Only the directive's option block is touched, as a
+#     `:depth:` line or a `depth:` key in its `---` YAML block, never inside a
+#     code fence. Every lecture use is `:depth: 2`; any other value stops the
+#     sync, as the upgrade rule does. A `{contents}` with no depth is unchanged.
 #
 # Everything else is copied as written, including the constructs the
 # migration project has NOT yet decided (QuantEcon/workspace-lectures#64):
@@ -160,6 +170,48 @@ find "$HERE/lectures.new" -name '*.md' -print0 | xargs -0 perl -i -ne '
     print;
   }
   if (eof) { if ($opts) { $yaml ? spill() : flush() } $dropblank = 0; @stack = (); close ARGV }
+'
+# The `{contents}` depth rewrite, inside a `{contents}` directive's option block
+# only: the `:key:` lines straight after the opening fence, or a `---` YAML block
+# that opens there. Fences are tracked as a stack, as in the `{cite}` rule, so a
+# `{contents}` shown inside a code fence is left alone.
+find "$HERE/lectures.new" -name '*.md' -print0 | xargs -0 perl -i -ne '
+  BEGIN { @stack = (); $opts = 0; $yaml = 0; $first = 0 }
+  sub depth {
+    my ($raw) = @_;
+    (my $v = $raw) =~ s/\s+#.*$//;
+    die "sync-from-sphinx: $ARGV:$.: {contents} has depth \"$raw\", not 2 -- the rule rewrites only :depth: 2 (SYNTAX.md, Contents depth); rewrite it by hand\n"
+      unless $v eq "2";
+  }
+  if ($opts) {
+    if ($first && /^\s*---\s*$/) { $yaml = 1; $first = 0; print; next }
+    $first = 0;
+    if ($yaml) {
+      if (/^\s*---\s*$/) { $yaml = 0; $opts = 0; print; next }
+      if (/^(\s*depth:\s*)(.*?)\s*$/) { depth($2); s/^(\s*depth:\s*)2/${1}1/ }
+      print; next;
+    }
+    if (/^\s*:([\w-]+):(?:\s+(.*?))?\s*$/) {
+      if ($1 eq "depth") { depth($2 // ""); s/^(\s*:depth:\s+)2/${1}1/ }
+      print; next;
+    }
+    $opts = 0;
+  }
+  if (/^\s*(`{3,}|~{3,})(.*)$/) {
+    my ($f, $info) = ($1, $2);
+    if (@stack && $info =~ /^\s*$/ && substr($f, 0, 1) eq substr($stack[-1][0], 0, 1) && length($f) >= length($stack[-1][0])) {
+      pop @stack;
+    } else {
+      my $incode = @stack && $stack[-1][1];
+      my $code = $incode
+        || $info !~ /^\s*\{/
+        || $info =~ /^\s*\{(code-cell|code-block|code|sourcecode|literalinclude|math|raw|eval-rst|csv-table|glue|mermaid)\}/;
+      if (!$incode && $info =~ /^\s*\{contents\}/) { $opts = 1; $yaml = 0; $first = 1 }
+      push @stack, [$f, $code ? 1 : 0];
+    }
+  }
+  print;
+  if (eof) { @stack = (); $opts = 0; $yaml = 0; $first = 0; close ARGV }
 '
 
 src_sha=$(git -C "$SRC" rev-parse HEAD 2>/dev/null || echo unknown)

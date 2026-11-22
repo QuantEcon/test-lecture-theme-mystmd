@@ -80,6 +80,16 @@ Measured productivity growth includes the effect of reallocation.
 An admonition used as a definition, before `sphinx-proof` was adopted.
 ```
 
+% A case for the theme-parity harness (QuantEcon/project-theme-parity#36's
+% review): docutils gives a titled admonition written without `:class:` the
+% class `admonition-<title slug>`, which is not an author's class.
+
+A titled admonition can also be written without a class:
+
+```{admonition} A note on units
+Prices are in dollars of the base year throughout.
+```
+
 ## Shared admonitions by `include`
 
 Four series keep a GPU notice in `_admonition/gpu.md` and pull it into every

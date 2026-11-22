@@ -2,7 +2,7 @@
 
 *The QuantEcon theme-parity corpus built on the mystmd stack: the same content as [`test-lecture-theme-sphinx`](https://github.com/QuantEcon/test-lecture-theme-sphinx), built with the QuantEcon mystmd fork and `quantecon-theme.mystmd`, so the two renderings can be compared feature by feature.*
 
-Last updated: 2026-11-18
+Last updated: 2026-11-22
 
 > **This is a test repository.** Nothing here is a lecture. Do not link to it from a lecture site.
 
@@ -14,10 +14,13 @@ Last updated: 2026-11-18
 bin/sync-from-sphinx ../test-lecture-theme-sphinx ../quantecon-theme.mystmd
 ```
 
-Two rewrites are applied:
+Five rewrites are applied, each a recorded decision (the script's header gives each rule's exact scope):
 
 - the theme's `scripts/rewrite-raw-blocks.mjs` (QuantEcon/quantecon-theme.mystmd#204): the notebook logo header is deleted from every page, the Our World in Data `{raw} html` iframe becomes `{iframe}`;
-- the long-output rename (theme-parity decision D15, QuantEcon/project-theme-parity#19): every `output_scroll` and `scroll-output` tag on a code cell becomes `collapse-output-24`, one for one, as the cutover tooling will do to the lecture sources (QuantEcon/workspace-lectures#64). `collapse-N` and `collapse-output-N` are copied as written; `scroll-input` gets no rule (no lecture uses it), so that cell renders at full length here.
+- the long-output rename (theme-parity decision D15, QuantEcon/project-theme-parity#19): every `output_scroll` and `scroll-output` tag on a code cell becomes `collapse-output-24`, one for one, as the cutover tooling will do to the lecture sources (QuantEcon/workspace-lectures#64). `collapse-N` and `collapse-output-N` are copied as written; `scroll-input` gets no rule (no lecture uses it), so that cell renders at full length here;
+- the plain-citation rename (D16, QuantEcon/project-theme-parity#37): every `{cite}` becomes `{cite:p}`, so a citation stays parenthetical;
+- the `:hide-output: false` deletion: the no-op option is removed from a code cell (QuantEcon/mystmd#152);
+- the `{contents}` depth rewrite (decided 2026-11-22; QuantEcon/project-theme-parity `SYNTAX.md`, "Contents depth"): `:depth: 2` becomes `:depth: 1`, because docutils counts the page title as a level and mystmd does not, and any other depth stops the sync.
 
 Every construct the migration has **not** decided (QuantEcon/workspace-lectures#64) is copied as written -- `{only}`, `{youtube}`, `{glue:figure}`, `{nb-exec-table}`, `{prf:Theorem}`, `{any}`, `{todo}` -- so the build shows what each does on mystmd today. A decision adds a rule to the sync script, and the diff between the two repositories' `lectures/` directories is the migration rewrite itself.
 

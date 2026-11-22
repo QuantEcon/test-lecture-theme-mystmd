@@ -139,7 +139,8 @@ Apply {prf:ref}`thm-neumann` to $\beta P$.
 
 `{prf:ref}` renders the kind and number: {prf:ref}`def-markov-kernel`,
 {prf:ref}`thm-neumann`, {prf:ref}`ejc_algo`, and with explicit text
-{prf:ref}`the contraction lemma <lem-contraction>`.
+{prf:ref}`the contraction lemma <lem-contraction>`. The unnumbered proposition
+is referenced the same way: {prf:ref}`prop-underinvestment`.
 
 ## A capitalised directive name
 
@@ -151,4 +152,22 @@ it; mystmd registers only the lowercase name.
 
 If a matrix $A \geq 0$ then there exists a real eigenvalue $r(A) \geq 0$ with
 a nonnegative eigenvector.
+```
+
+## Blocks without a label
+
+% Cases for the theme-parity harness (QuantEcon/project-theme-parity#36's
+% review), not lecture constructs. Sphinx gives an unlabelled block a generated
+% label, the kind and the page's serial (here `theorem-13` and `example-14`),
+% which the labelled-block counts must not take for an author's label. Placed
+% last so the blocks above keep their numbers.
+
+Most blocks carry a label, but some are written without one:
+
+```{prf:theorem}
+Every contraction on a complete metric space has exactly one fixed point.
+```
+
+```{prf:example}
+Halving every real number is a contraction, and zero is its only fixed point.
 ```

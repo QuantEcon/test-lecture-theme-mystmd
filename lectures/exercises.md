@@ -182,3 +182,17 @@ dynamic-programming lectures.
 
 Exercises are referenced with `{ref}`: {ref}`short_path_ex1` and
 {ref}`the compact one <ergodicity-ex-1>`.
+
+% A case for the theme-parity harness (QuantEcon/project-theme-parity#36's
+% review), not a lecture construct: a section whose anchor is also the id of a
+% proof block on another page. It sits on this page because the harness reads
+% pages in alphabetical order, and this one comes before `proofs`, where the
+% corollary is.
+
+(cor_unique)=
+## A section whose anchor matches a proof label
+
+This section's label differs from the corollary's on the proofs page by one
+character, and docutils writes both anchors as `cor-unique`. A reference to it,
+{ref}`the section with that anchor <cor_unique>`, reaches this section, not the
+corollary.
