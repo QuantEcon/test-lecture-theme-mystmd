@@ -16,7 +16,7 @@ kernelspec:
 ```
 
 ```{contents} Contents
-:depth: 2
+:depth: 1
 ```
 
 % Patterns from lecture-python-programming/about_py.md (epigraph, index),

@@ -44,7 +44,8 @@ The `{doc}` role links to another page by file name, plain -- {doc}`typography`
 figure and {numref}`fig-random-walk` a figure produced by a code cell, both on
 the {doc}`figures` page. Equations are referenced with `{eq}`, as in
 {eq}`eq:cagan_demand`, and theorems and their kin with `{prf:ref}`, as in
-{prf:ref}`thm-neumann` and {prf:ref}`def-markov-kernel`.
+{prf:ref}`thm-neumann` and {prf:ref}`def-markov-kernel`. The unnumbered proposition on
+the proofs page is referenced the same way: {prf:ref}`prop-underinvestment`.
 
 ## Citations
 
@@ -79,3 +80,16 @@ often confused in a rendering check.
 ## Index roles
 
 Index roles also appear in running text: {index}`Bellman equation <single: Bellman equation>`.
+
+% A case for the theme-parity harness (QuantEcon/project-theme-parity#36's
+% review), not a lecture construct: links to other sites whose fragment is a
+% corpus label or an equation anchor. Neither is a reference to a proof block
+% or an equation on this site.
+
+## Links that leave the site
+
+A link to another site can end in a fragment that a page here also defines.
+These point at the lectures, not at this site: the Perron-Frobenius theorem in
+[the eigenvalue lecture](https://intro.quantecon.org/eigen_II.html#perron-frobenius),
+whose label the proofs page reuses, and
+[a numbered equation in the linear algebra lecture](https://python.quantecon.org/linear_algebra.html#equation-la-se).

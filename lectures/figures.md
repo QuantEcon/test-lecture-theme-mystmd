@@ -80,6 +80,16 @@ The `figclass` values the programming lectures set on screenshots:
 :scale: 60
 ```
 
+% A case for the theme-parity harness (QuantEcon/project-theme-parity#36's
+% review): mystmd writes an `align` on every image, so only the rendered page
+% shows whether `left` survived.
+
+Alignment other than centre:
+
+```{image} /_static/lecture_specific/short_path/graph.png
+:align: left
+```
+
 ## Figures from code
 
 A matplotlib figure with a caption and a name attached through `mystnb`
@@ -146,6 +156,16 @@ glue("flow_fig", fig, display=False)
 :figwidth: 600px
 
 A glued figure, placed after the cell that produced it.
+```
+
+% A case for the theme-parity harness (QuantEcon/project-theme-parity#36's
+% review): an unnamed glued figure, which the named-figure counts must leave out.
+
+A key can be placed more than once, and a glued figure need not be named:
+
+```{glue:figure} flow_fig
+
+The same output, placed again without a name.
 ```
 
 ## Embedded media
