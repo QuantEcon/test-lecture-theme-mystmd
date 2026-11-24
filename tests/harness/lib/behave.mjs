@@ -2,7 +2,7 @@
 // Each resolves to { result: "pass" | "fail" | "skip", detail }; a throw becomes an `error` row.
 //
 // This file is the same in QuantEcon/test-lecture-theme-sphinx and QuantEcon/test-lecture-theme-mystmd.
-import { oneLine, said, sleep } from "./util.mjs";
+import { answered, oneLine, said, sleep } from "./util.mjs";
 
 export const pass = (detail) => ({ result: "pass", detail });
 export const fail = (detail) => ({ result: "fail", detail });
@@ -87,14 +87,20 @@ export async function fontSizeFlow(c, { increase = "increase", text }) {
   return same(onOther) && same(reloaded) ? pass(detail) : fail(detail);
 }
 
-/** Fetch each URL: [{ url, status, ok }], ok meaning 2xx after redirects. */
+/** Fetch each URL: [{ url, status, ok, answered }], ok meaning 2xx after redirects. */
 export async function fetchAll(c, urls) {
   const out = [];
   for (const u of urls) {
     const r = await c.fetch(u);
-    out.push({ url: u, status: r.status, error: r.error, ok: r.status >= 200 && r.status < 300, said: said(u, r) });
+    out.push({ url: u, status: r.status, error: r.error, ok: r.status >= 200 && r.status < 300, answered: answered(r), said: said(u, r) });
   }
   return out;
+}
+
+/** pass when every link answered 200, skip when one got no answer (a person checks it), else fail. */
+export function verdictOf(words, results, ok = results.every((r) => r.status === 200)) {
+  if (results.some((r) => !answered(r))) return skip(`${words}; a link got no answer, so a person checks it`);
+  return ok ? pass(words) : fail(words);
 }
 
 const pageCache = new Map();
@@ -112,6 +118,7 @@ export async function targetExists(c, href) {
   const key = u.href.replace(/#.*$/, "");
   if (!pageCache.has(key)) pageCache.set(key, await c.fetch(key, { body: true }));
   const r = pageCache.get(key);
+  if (!answered(r)) return { ok: null, how: said(key, r) };
   if (!(r.status >= 200 && r.status < 300)) return { ok: false, how: said(key, r) };
   if (!frag) return { ok: true, how: `${u.pathname} answers ${r.status}` };
   const esc = frag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/&/g, "(?:&|&amp;)");
@@ -215,31 +222,35 @@ export function notebookOf(target) {
 
 /** Fetch each launch target's notebook: [verdict, words]. */
 export async function launchTargets(c, targets) {
+  if (!targets.length) return fail("the control lists no target");
   const nb = `${c.feature.page}.ipynb`;
-  const words = [];
-  let ok = targets.length > 0;
+  const words = [], results = [];
+  let ok = true;
   for (const o of targets) {
     const notebook = notebookOf(o.url);
     const r = await c.fetch(notebook);
     const names = notebook.split(/[?#]/)[0].endsWith(`/${nb}`);
     ok &&= names && r.status === 200;
+    results.push(r);
     words.push(`${o.label}: ${names ? `names ${nb}` : `does not name ${nb}`}, ${said(notebook, r)}`);
   }
-  return { result: ok ? "pass" : "fail", detail: words.join("; ") || "the control lists no target" };
+  return verdictOf(words.join("; "), results, ok);
 }
 
 /** Fetch each download link: does it name this page's notebook, and answer 200? */
 export async function downloadLinks(c, hrefs) {
-  const words = [];
-  let ok = hrefs.length > 0;
+  if (!hrefs.length) return fail("no link to fetch");
+  const words = [], results = [];
+  let ok = true;
   for (const h of hrefs) {
     const u = new URL(h, c.page.url()).href;
     const r = await c.fetch(u);
     const names = u.split(/[?#]/)[0].endsWith(`/${c.feature.page}.ipynb`);
     ok &&= names && r.status === 200;
+    results.push(r);
     words.push(`"${h}" resolves to ${said(u, r)}${names ? "" : ", not this page's notebook"}`);
   }
-  return { result: ok ? "pass" : "fail", detail: words.join("; ") || "no link to fetch" };
+  return verdictOf(words.join("; "), results, ok);
 }
 
 async function linkTargets(c, hrefs) {
@@ -249,8 +260,9 @@ async function linkTargets(c, hrefs) {
 }
 
 function tally(res) {
-  const bad = res.filter((r) => !r.ok);
-  return `${res.length - bad.length} of ${res.length} lead to their targets${bad.length ? `; not: ${bad.slice(0, 4).map((r) => `${r.href} (${r.how})`).join(", ")}` : ""}`;
+  const bad = res.filter((r) => r.ok === false), open = res.filter((r) => r.ok === null);
+  return `${res.length - bad.length - open.length} of ${res.length} lead to their targets${bad.length ? `; not: ${bad.slice(0, 4).map((r) => `${r.href} (${r.how})`).join(", ")}` : ""}`
+    + `${open.length ? `; unanswered: ${open.slice(0, 3).map((r) => `${r.href} (${r.how})`).join(", ")}` : ""}`;
 }
 
 const cardWords = (card) => `hover: ${card.shown ? `a card ("${card.text}")` : "no card"}${card.title ? `, the link's title "${card.title}"` : ""}`;
@@ -266,8 +278,9 @@ async function referencesFlow(c) {
   const card = await hoverCard(c, c.part().first());
   const unlinked = hrefs.length - linked.length;
   const detail = `${linked.length ? tally(res) : "none is a link"}${unlinked && linked.length ? `; ${unlinked} not a link` : ""}; ${cardWords(card)}`;
-  const ok = res.every((r) => r.ok) && (unlinked === 0 || card.shown);
-  return ok ? pass(detail) : fail(detail);
+  if (res.some((r) => r.ok === false) || (unlinked && !card.shown)) return fail(detail);
+  if (res.some((r) => r.ok === null)) return skip(`${detail}; a target page got no answer, so a person checks it`);
+  return pass(detail);
 }
 
 export function commonBehaviours(p) {
@@ -288,8 +301,7 @@ export function commonBehaviours(p) {
       const file = /\/(edit|blob)\//.test(href);
       const view = href.replace("/edit/", "/blob/");
       const r = await c.fetch(view);
-      const detail = `${file ? "names the page's file" : "names the repository"}: ${href}; ${said(view, r)}`;
-      return r.status === 200 ? pass(detail) : r.status ? fail(detail) : skip(`${detail}: a person checks the link`);
+      return verdictOf(`${file ? "names the page's file" : "names the repository"}: ${href}; ${said(view, r)}`, [r]);
     },
 
     async "in-page-outline"(c) {
@@ -410,15 +422,14 @@ export function commonBehaviours(p) {
 
     async favicon(c) {
       const hrefs = await c.part().evaluateAll((ls) => ls.map((l) => l.getAttribute("href")));
-      const words = [];
-      let ok = true;
+      const words = [], results = [];
       for (const h of hrefs) {
         const u = new URL(h, c.page.url()).href;
         const r = await c.fetch(u);
-        ok &&= r.status === 200;
+        results.push(r);
         words.push(`"${h}": ${said(u, r)}${u.startsWith(c.site.url) ? "" : ", outside the site's base"}`);
       }
-      return { result: ok ? "pass" : "fail", detail: words.join("; ") };
+      return verdictOf(words.join("; "), results);
     },
 
     async "static-assets"(c) {

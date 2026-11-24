@@ -87,22 +87,32 @@ export function describeCounts(counts) {
   return counts.map((c) => `${c.name ? `${c.name} ` : ""}${c.matched} (${c.visible} visible)`).join("; ");
 }
 
+const answers = new Map(); // one answer per URL for the run: fewer requests, to github.com above all
+
+/** Did the request get an answer about the link? Not when it failed to connect, was rate-limited (429) or hit a 5xx. */
+export const answered = (r) => r.status > 0 && r.status !== 429 && r.status < 500;
+
 /**
- * Fetch `url` from the page's browser context (its cookies and network), following redirects, once more after 3 s
- * on a 5xx or a failure to connect. Resolves to { status, url, error, body? }; status 0 when no answer came.
+ * Fetch `url` from the page's browser context, following redirects; on a 429 or a 5xx, or a failure to connect, twice
+ * more, after its Retry-After (at most 20 s) or 3 s and 6 s. Resolves to { status, url, error, body? }; status 0 when
+ * no answer came. An answer is kept for the rest of the run, so each URL is asked for once.
  */
 export async function fetchUrl(page, url, { body = false, method = "GET" } = {}) {
+  const key = `${method} ${url}${body ? " +body" : ""}`;
+  if (answers.has(key)) return answers.get(key);
   let last = "";
-  for (let attempt = 1; attempt <= 2; attempt++) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const r = await page.context().request.fetch(url, { method, maxRedirects: 10, failOnStatusCode: false, timeout: 30_000 });
       const status = r.status();
-      if (status >= 500 && attempt === 1) { last = `${status}`; await sleep(3000); continue; }
-      return { status, url: r.url(), body: body ? await r.text() : undefined, retried: attempt > 1 };
+      const out = { status, url: r.url(), body: body ? await r.text() : undefined, retried: attempt > 1 };
+      if (answered(out)) { answers.set(key, out); return out; }
+      if (attempt === 3) return out;
+      await sleep(Math.min(20, Number(r.headers()["retry-after"]) || 3 * attempt) * 1000);
     } catch (e) {
       last = oneLine(e.message, 160);
-      if (attempt === 2) return { status: 0, url, error: last };
-      await sleep(3000);
+      if (attempt === 3) return { status: 0, url, error: last };
+      await sleep(3000 * attempt);
     }
   }
 }
@@ -110,7 +120,8 @@ export async function fetchUrl(page, url, { body = false, method = "GET" } = {})
 /** "a.b/c answers 200" for a detail, the URL shortened. */
 export function said(url, r) {
   const u = String(url).replace(/^https?:\/\//, "");
-  return r.status ? `${u} answers ${r.status}` : `${u} did not answer (${r.error})`;
+  if (!r.status) return `${u} did not answer (${r.error})`;
+  return `${u} answers ${r.status}${r.status === 429 ? " (rate-limited)" : ""}`;
 }
 
 /** Run `fn` with a time limit; a check that hangs becomes an error row rather than a hung job. */

@@ -171,10 +171,9 @@ const behaviours = {
     }
     const unlinked = found.filter((f) => !f.href);
     const res = await B.fetchAll(c, found.filter((f) => f.href).map((f) => f.href));
-    const words = found.map((f) => `${f.name}: ${f.href ? res.find((r) => r.url === f.href).said : "no link"}`);
-    if (unlinked.length || res.some((r) => r.status >= 400)) return fail(words.join("; "));
-    if (res.some((r) => !r.status)) return skip(`${words.join("; ")}: a page did not answer, so a person checks it`);
-    return pass(`${words.join("; ")} (each link is in the card its name opens)`);
+    const words = `${found.map((f) => `${f.name}: ${f.href ? res.find((r) => r.url === f.href).said : "no link"}`).join("; ")} (each link is in the card its name opens)`;
+    if (unlinked.length) return fail(words);
+    return B.verdictOf(words, res, res.every((r) => r.ok));
   },
 
   async "notebook-header"(c) {
