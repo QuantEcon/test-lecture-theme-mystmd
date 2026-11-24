@@ -1,0 +1,95 @@
+page,family,check,viewport,scheme,result,detail
+code_cells,header-title,present,desktop,light,pass,1 (1 visible)
+code_cells,header-title,present,desktop,dark,pass,1 (1 visible)
+typography,dark-mode,present,desktop,light,pass,toggle 1 (1 visible); dark 0 (0 visible)
+typography,dark-mode,behaviour,desktop,light,pass,toggled from light to dark; on code_cells: dark; after a reload: dark
+typography,dark-mode,present,desktop,dark,pass,toggle 1 (1 visible); dark 1 (1 visible)
+typography,dark-mode,behaviour,desktop,dark,pass,toggled from dark to light; on code_cells: light; after a reload: light
+typography,dark-palette,present,desktop,light,absent,0 (0 visible)
+typography,dark-palette,behaviour,desktop,light,skip,nothing to exercise
+typography,dark-palette,present,desktop,dark,pass,1 (1 visible)
+typography,dark-palette,behaviour,desktop,dark,skip,No palette is expected
+code_cells,stderr-fold,present,desktop,light,pass,1 (1 visible)
+code_cells,stderr-fold,behaviour,desktop,light,pass,on load: hidden; after the toggle: shown
+code_cells,stderr-fold,present,desktop,dark,pass,1 (1 visible)
+code_cells,stderr-fold,behaviour,desktop,dark,pass,on load: hidden; after the toggle: shown
+code_cells,download-pdf,present,desktop,light,none,no locator
+code_cells,download-pdf,behaviour,desktop,light,none,no locator
+code_cells,download-pdf,present,desktop,dark,none,no locator
+code_cells,download-pdf,behaviour,desktop,dark,none,no locator
+long_cells,long-input,present,desktop,light,pass,1 (1 visible)
+long_cells,long-input,behaviour,desktop,light,pass,after a second press
+long_cells,long-input,present,desktop,dark,pass,1 (1 visible)
+long_cells,long-input,behaviour,desktop,dark,pass,after a second press
+intro,page,error-marker,desktop,light,pass,none of: mjx-merror
+intro,page,console,desktop,light,pass,no console error
+intro,page,overflow,desktop,light,pass,<= clientWidth
+intro,page,error-marker,desktop,dark,pass,none of: mjx-merror
+intro,page,console,desktop,dark,pass,no console error
+intro,page,overflow,desktop,dark,pass,<= clientWidth
+intro,page,error-marker,tablet,light,pass,none of: mjx-merror
+intro,page,console,tablet,light,pass,no console error
+intro,page,overflow,tablet,light,pass,<= clientWidth
+intro,page,error-marker,tablet,dark,pass,none of: mjx-merror
+intro,page,console,tablet,dark,pass,no console error
+intro,page,overflow,tablet,dark,pass,<= clientWidth
+intro,page,error-marker,phone,light,pass,none of: mjx-merror
+intro,page,console,phone,light,pass,no console error
+intro,page,overflow,phone,light,pass,<= clientWidth
+intro,page,error-marker,phone,dark,pass,none of: mjx-merror
+intro,page,console,phone,dark,pass,no console error
+intro,page,overflow,phone,dark,pass,<= clientWidth
+typography,page,error-marker,desktop,light,pass,none of: mjx-merror
+typography,page,console,desktop,light,pass,no console error
+typography,page,overflow,desktop,light,pass,<= clientWidth
+typography,page,error-marker,desktop,dark,pass,none of: mjx-merror
+typography,page,console,desktop,dark,pass,no console error
+typography,page,overflow,desktop,dark,pass,<= clientWidth
+typography,page,error-marker,tablet,light,pass,none of: mjx-merror
+typography,page,console,tablet,light,pass,no console error
+typography,page,overflow,tablet,light,pass,<= clientWidth
+typography,page,error-marker,tablet,dark,pass,none of: mjx-merror
+typography,page,console,tablet,dark,pass,no console error
+typography,page,overflow,tablet,dark,pass,<= clientWidth
+typography,page,error-marker,phone,light,pass,none of: mjx-merror
+typography,page,console,phone,light,pass,no console error
+typography,page,overflow,phone,light,pass,<= clientWidth
+typography,page,error-marker,phone,dark,pass,none of: mjx-merror
+typography,page,console,phone,dark,pass,no console error
+typography,page,overflow,phone,dark,pass,<= clientWidth
+code_cells,page,error-marker,desktop,light,pass,none of: mjx-merror
+code_cells,page,console,desktop,light,pass,no console error
+code_cells,page,overflow,desktop,light,pass,<= clientWidth
+code_cells,page,error-marker,desktop,dark,pass,none of: mjx-merror
+code_cells,page,console,desktop,dark,pass,no console error
+code_cells,page,overflow,desktop,dark,pass,<= clientWidth
+code_cells,page,error-marker,tablet,light,pass,none of: mjx-merror
+code_cells,page,console,tablet,light,pass,no console error
+code_cells,page,overflow,tablet,light,pass,<= clientWidth
+code_cells,page,error-marker,tablet,dark,pass,none of: mjx-merror
+code_cells,page,console,tablet,dark,pass,no console error
+code_cells,page,overflow,tablet,dark,pass,<= clientWidth
+code_cells,page,error-marker,phone,light,pass,none of: mjx-merror
+code_cells,page,console,phone,light,pass,no console error
+code_cells,page,overflow,phone,light,pass,<= clientWidth
+code_cells,page,error-marker,phone,dark,pass,none of: mjx-merror
+code_cells,page,console,phone,dark,pass,no console error
+code_cells,page,overflow,phone,dark,pass,<= clientWidth
+long_cells,page,error-marker,desktop,light,pass,none of: mjx-merror
+long_cells,page,console,desktop,light,pass,no console error
+long_cells,page,overflow,desktop,light,pass,<= clientWidth
+long_cells,page,error-marker,desktop,dark,pass,none of: mjx-merror
+long_cells,page,console,desktop,dark,pass,no console error
+long_cells,page,overflow,desktop,dark,pass,<= clientWidth
+long_cells,page,error-marker,tablet,light,pass,none of: mjx-merror
+long_cells,page,console,tablet,light,pass,no console error
+long_cells,page,overflow,tablet,light,pass,<= clientWidth
+long_cells,page,error-marker,tablet,dark,pass,none of: mjx-merror
+long_cells,page,console,tablet,dark,pass,no console error
+long_cells,page,overflow,tablet,dark,pass,<= clientWidth
+long_cells,page,error-marker,phone,light,pass,none of: mjx-merror
+long_cells,page,console,phone,light,pass,no console error
+long_cells,page,overflow,phone,light,pass,<= clientWidth
+long_cells,page,error-marker,phone,dark,pass,none of: mjx-merror
+long_cells,page,console,phone,dark,pass,no console error
+long_cells,page,overflow,phone,dark,pass,<= clientWidth

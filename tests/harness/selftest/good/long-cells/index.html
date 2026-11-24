@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Long cells — self-test</title>
+<script>/* @myst-theme/site's BlockingThemeLoader: the saved choice, else the preference */
+const saved = localStorage.getItem("myst:theme");
+const pref = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+document.documentElement.classList.add(saved ?? pref);</script>
+<style>body{margin:0;font:16px sans-serif} html.dark body{background:#1c1917;color:#ddd} article main{max-width:800px;margin:0 auto}
+article main p{font-size:18px} .qe-collapse--input .qe-collapse__body{max-height:6em;overflow:hidden}
+.qe-collapse--input[data-expanded="true"] .qe-collapse__body{max-height:none} pre{margin:0}</style></head>
+<body>
+<div><ul><li><button type="button" class="qe-toc-toggle" aria-label="Table of contents">toc</button></li>
+<li><button aria-label="Change contrast">contrast</button></li></ul></div>
+<article class="article content"><main>
+<p>A paragraph of lecture text, long enough to measure, with <a href="../">a link</a>.</p><div class="qe-collapse qe-collapse--input" data-expanded="false" style="--qe-collapse-cap:5.5em">
+<div class="qe-collapse__body"><pre>x_0 = 0
+x_1 = 1
+x_2 = 2
+x_3 = 3
+x_4 = 4
+x_5 = 5
+x_6 = 6
+x_7 = 7
+x_8 = 8
+x_9 = 9
+x_10 = 10
+x_11 = 11
+x_12 = 12
+x_13 = 13
+x_14 = 14
+x_15 = 15
+x_16 = 16
+x_17 = 17
+x_18 = 18
+x_19 = 19
+x_20 = 20
+x_21 = 21
+x_22 = 22
+x_23 = 23
+x_24 = 24
+x_25 = 25
+x_26 = 26
+x_27 = 27
+x_28 = 28
+x_29 = 29
+x_30 = 30
+x_31 = 31
+x_32 = 32
+x_33 = 33
+x_34 = 34
+x_35 = 35
+x_36 = 36
+x_37 = 37
+x_38 = 38
+x_39 = 39</pre></div><button class="qe-collapse__bar">Expand</button></div>
+<script>document.querySelector(".qe-collapse__bar").addEventListener("click", function () {
+  const c = this.closest(".qe-collapse"); c.dataset.expanded = c.dataset.expanded === "true" ? "false" : "true"; });</script>
+</main></article>
+<script>/* a working toggle: switches the page and keeps the choice */
+document.querySelector('button[aria-label="Change contrast"]').addEventListener("click", function () {
+  const dark = !document.documentElement.classList.contains("dark");
+  document.documentElement.classList.remove("light", "dark");
+  document.documentElement.classList.add(dark ? "dark" : "light");
+  localStorage.setItem("myst:theme", dark ? "dark" : "light");
+});</script>
+</body></html>

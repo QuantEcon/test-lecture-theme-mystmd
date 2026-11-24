@@ -1,0 +1,276 @@
+# locators.yml -- this site's locator table for the rendered checks (QuantEcon/project-theme-parity#15, D9).
+#
+# A copy of bin/site-features.yml in QuantEcon/project-theme-parity at the commit `source` names, taking each entry's
+# `checks` and only this theme's side of it (`mystmd:`). It is a copy because that repository is private, and this
+# repository's CI cannot read it. The entries keep that file's order and ids: a row of rendered.csv is keyed by the
+# feature id, and the harness pairs it with the same row from QuantEcon/test-lecture-theme-sphinx.
+#
+# Each entry carries what a check needs:
+#   id         the feature id (the matrix row's name)
+#   name       what the feature is
+#   page       the corpus page the check runs on, by its Sphinx name (this site serves it at the slug, - for _, and intro at the base)
+#   viewport   desktop (1280), wide (1440, where the Sphinx theme hides the feature at 1280), tablet (820) or phone (390)
+#   locator    this theme's locator: a CSS selector (Playwright's `:has-text()` allowed), or a mapping of named parts to
+#              selectors, the first part being the one whose presence is the `present` check; null where this site has
+#              no counterpart, which the CSV records as `none`, not as a locator that matched nothing
+#   behaviour  where the feature behaves, the behaviour to exercise (theme.mjs implements it, keyed by the id)
+#   corrected  only where a locator had moved on this site's build: {from: the locator as copied, why: what moved}
+#
+# Every locator was checked against this site's build before it was copied here. One that had moved is corrected
+# here, with its `corrected:` note, and carried in provenance.json; the correction belongs in bin/site-features.yml
+# too, which this repository cannot change, so the PR that makes it proposes it there.
+source:
+  repository: QuantEcon/project-theme-parity
+  path: bin/site-features.yml
+  commit: 530b6a80afa534d6935b8ee6d9243dc7df7e7ebd
+  side: mystmd
+features:
+  - id: launch
+    name: "Launch buttons, and what each opens"
+    page: code_cells
+    viewport: desktop
+    locator: "li.qe-launch-slot > *"
+    behaviour: "open the control; every target names this page's notebook, and fetching it answers 200"
+  - id: download-notebook
+    name: "Download the page's notebook"
+    page: code_cells
+    viewport: desktop
+    locator:
+      control: 'button[aria-label="Downloads"]'
+      items: '[role="menu"] a'
+    behaviour: "open the control where it is a menu, and fetch each link"
+  - id: download-pdf
+    name: "A PDF of the page"
+    page: code_cells
+    viewport: desktop
+    locator: null
+    behaviour: "activate the control; a print dialog opens"
+  - id: fullscreen
+    name: "Full-screen control"
+    page: typography
+    viewport: desktop
+    locator: 'button[aria-label="Full Screen"]'
+    behaviour: "press it; `document.fullscreenElement` is set, then cleared"
+  - id: font-size
+    name: "Text size controls"
+    page: typography
+    viewport: desktop
+    locator:
+      increase: 'button[aria-label="Increase font size"]'
+      decrease: 'button[aria-label="Reduce font size"]'
+    behaviour: "increase once; the text grows; open another page and reload; it holds"
+  - id: dark-mode
+    name: "Dark mode, and whether the reader's choice persists"
+    page: typography
+    viewport: desktop
+    locator:
+      toggle: 'button[aria-label="Change contrast"]'
+      dark: "html.dark"
+    behaviour: "toggle; open another page; reload; then emulate a change of `prefers-color-scheme`"
+  - id: dark-palette
+    name: "The dark palette"
+    page: typography
+    viewport: desktop
+    locator: "html.dark"
+    behaviour: "in dark mode, record the page, text and link colours (#15's metrics)"
+  - id: search
+    name: "Search"
+    page: typography
+    viewport: desktop
+    locator: "button.myst-search-bar"
+    behaviour: 'search for "Cagan"; a result links to the mathematics page'
+  - id: edit-on-github
+    name: "The page's source on GitHub"
+    page: code_cells
+    viewport: desktop
+    locator: 'a[href*="github.com/"][href*="/edit/"]'
+    behaviour: "fetch the link; record whether it names the page's file or the repository"
+  - id: mobile-navigation
+    name: "Navigation at a phone width"
+    page: typography
+    viewport: phone
+    locator:
+      menu: 'button[aria-label="More actions"]'
+      contents: "button.qe-toc-toggle"
+    behaviour: "list the toolbar actions visible and in the menu; open the drawer; compare `scrollWidth` with the viewport"
+  - id: contents-drawer
+    name: "The site's table of contents"
+    page: code_cells
+    viewport: desktop
+    locator:
+      toggle: "button.qe-toc-toggle"
+      entries: "#qe-toc nav a"
+    behaviour: "open the drawer; every corpus page is listed in order, the current one marked; at 1024px it leaves the text clear"
+  - id: in-page-outline
+    name: 'The "On this page" outline'
+    page: typography
+    viewport: wide
+    locator:
+      nav: "nav.qe-outline"
+      active: "nav.qe-outline a[aria-current]"
+    behaviour: "scroll 1500px; the outline is still in the viewport and one entry is active; an h4 entry is listed"
+  - id: outline-copy-link
+    name: "Copy a section's link from the outline"
+    page: typography
+    viewport: wide
+    locator: null
+    behaviour: "activate it; the clipboard holds the page URL with the section's fragment"
+  - id: back-navigation
+    name: "Back after an in-page anchor"
+    page: typography
+    viewport: wide
+    locator: 'nav.qe-outline a[href*="#"]'
+    behaviour: "follow an outline entry, go Back; the title is unchanged and the page raised no error"
+  - id: previous-next
+    name: "Previous and next pages"
+    page: code_cells
+    viewport: desktop
+    locator: 'link[rel="prev"], link[rel="next"], a[rel="prev"], a[rel="next"]'
+    behaviour: "each link names the neighbouring page in the site's order"
+  - id: breadcrumbs
+    name: "Breadcrumbs"
+    page: code_cells
+    viewport: desktop
+    locator: '[class*="breadcrumb"], nav[aria-label*="readcrumb"]'
+  - id: back-to-top
+    name: "Back to top"
+    page: code_cells
+    viewport: wide
+    locator: '.qe-back-to-top a[href="#top"]'
+    behaviour: "scroll down, follow it; the page's `#top` is in view"
+  - id: skip-links
+    name: "Keyboard navigation and skip links"
+    page: typography
+    viewport: desktop
+    locator: "a.myst-skip-to-link"
+    behaviour: "press Tab; the first focus is a skip link; Tab through the toolbar and operate a control with Enter"
+  - id: header-title
+    name: "The book's title in the page header"
+    page: code_cells
+    viewport: desktop
+    locator: '[aria-label="Book title"] a'
+  - id: authors
+    name: "The authors' byline"
+    page: code_cells
+    viewport: desktop
+    locator: ".myst-fm-author"
+    behaviour: "each author's link opens their page"
+  - id: last-changed
+    name: "Last changed, and the page's history"
+    page: code_cells
+    viewport: desktop
+    locator:
+      toggle: 'button[aria-expanded]:has-text("Last changed")'
+      panel: "[data-qe-history-panel]"
+    behaviour: "open it; it lists commits, each linking to GitHub"
+  - id: licence-footer
+    name: "The page footer and licence line"
+    page: code_cells
+    viewport: desktop
+    locator: 'a[rel="license"][href*="creativecommons.org/licenses/by-sa/4.0"]'
+    behaviour: "the footer's text carries the licence sentence and the theme credit"
+  - id: notebook-header
+    name: "The notebook header"
+    page: code_cells
+    viewport: desktop
+    locator: null
+    behaviour: "download each stack's notebook for the page and compare its first cell"
+  - id: page-meta
+    name: "Canonical link, page title and social cards"
+    page: code_cells
+    viewport: desktop
+    locator:
+      canonical: 'link[rel="canonical"]'
+      og: 'meta[property^="og:"]'
+    behaviour: "the canonical URL and `og:url` equal the page's address"
+  - id: favicon
+    name: "The favicon"
+    page: code_cells
+    viewport: desktop
+    locator: 'link[rel~="icon"]'
+    behaviour: "fetch the icon link, resolved against the page"
+  - id: static-assets
+    name: "Stylesheets, fonts and scripts load on a static deploy"
+    page: math
+    viewport: desktop
+    locator: 'link[rel="stylesheet"]'
+    behaviour: "load the page and record every failed request for an asset of the site"
+  - id: languages
+    name: "The language switcher and hreflang links"
+    page: intro
+    viewport: desktop
+    locator:
+      switcher: "li.qe-language-slot > *"
+      alternates: 'link[rel="alternate"][hreflang]'
+  - id: right-to-left
+    name: "Right-to-left layout"
+    page: intro
+    viewport: desktop
+    locator: 'html[dir="rtl"]'
+  - id: code-highlighting
+    name: "Syntax highlighting of code"
+    page: code_cells
+    viewport: desktop
+    locator: '.myst-code code span[class^="hljs-"]'
+  - id: code-copy
+    name: "Copy buttons on code"
+    page: code_cells
+    viewport: desktop
+    locator: ".myst-code button.myst-code-copy-icon"
+    behaviour: "press it on a cell; the clipboard holds the cell's source"
+  - id: long-input
+    name: "Collapsed long inputs (`collapse-N`)"
+    page: long_cells
+    viewport: desktop
+    locator: ".qe-collapse--input .qe-collapse__bar"
+    behaviour: "the input's height is capped; the bar expands it to full height and collapses it again"
+  - id: long-output
+    name: "Long outputs (`scroll-output`, `output_scroll`)"
+    page: long_cells
+    viewport: desktop
+    locator: '.qe-collapse--output[style*="--qe-collapse-cap:24.5em"], .qe-collapse--output[style*="--qe-collapse-cap: 24.5em"]'
+    behaviour: "the output's height is capped; on mystmd the bar expands and collapses it"
+  - id: stderr-fold
+    name: "Folded stderr output"
+    page: code_cells
+    viewport: desktop
+    locator: "details.qe-stderr > summary"
+    behaviour: "the stderr text is hidden on load; the toggle shows it"
+  - id: output-images
+    name: "Output images centred"
+    page: figures
+    viewport: desktop
+    locator: ".myst-jp-nb-block img:not(.plot-img)"
+    behaviour: "the gaps left and right of each output image are equal to within a pixel"
+  - id: footnote-hover
+    name: "Footnote references"
+    page: references
+    viewport: desktop
+    locator: 'a[href^="#fn-"]'
+    behaviour: "follow each reference to its definition; hover it and record any card"
+  - id: citation-hover
+    name: "Citation references"
+    page: references
+    viewport: desktop
+    locator: "cite[data-state]"
+    behaviour: "hover a citation and record what shows; follow it where it is a link"
+  - id: xref-hover
+    name: "Cross-reference hovers"
+    page: references
+    viewport: desktop
+    locator: "main a.hover-link"
+    behaviour: "hover a reference and record any card; follow it to its target"
+  - id: maths-accessibility
+    name: "Maths for assistive technology"
+    page: math
+    viewport: desktop
+    locator: ".katex .katex-mathml math"
+    behaviour: "count expressions against the page's maths count (layer 2); right-click one and record the menu"
+  - id: print
+    name: "Print styling"
+    page: typography
+    viewport: desktop
+    locator:
+      toolbar: "div:has(> ul > li > button.qe-toc-toggle)"
+      outline: "nav.qe-outline"
+    behaviour: "emulate print media; record which of these are displayed, and capture the printed page"

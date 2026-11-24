@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Code cells — self-test</title>
+<script>/* @myst-theme/site's BlockingThemeLoader: the saved choice, else the preference */
+const saved = localStorage.getItem("myst:theme");
+const pref = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+document.documentElement.classList.add(saved ?? pref);</script>
+<style>body{margin:0;font:16px sans-serif} html.dark body{background:#1c1917;color:#ddd} article main{max-width:800px;margin:0 auto}
+article main p{font-size:18px} .qe-collapse--input .qe-collapse__body{max-height:6em;overflow:hidden}
+.qe-collapse--input[data-expanded="true"] .qe-collapse__body{max-height:none} pre{margin:0}</style></head>
+<body>
+<div><ul><li><button type="button" class="qe-toc-toggle" aria-label="Table of contents">toc</button></li>
+<li><button aria-label="Change contrast">contrast</button></li></ul></div>
+<article class="article content"><main>
+<div><h1>Self-test Lectures, the title not linked</h1></div><p>A paragraph of lecture text, long enough to measure, with <a href="../">a link</a>.</p><details class="qe-stderr" open><summary>Code warnings</summary><div><pre>UserWarning: this goes to stderr</pre></div></details>
+</main></article>
+<script>/* a broken toggle: the click does nothing */
+document.querySelector('button[aria-label="Change contrast"]').addEventListener("click", function () {});</script>
+<script>console.error("harness self-test: a console error on load");</script>
+</body></html>

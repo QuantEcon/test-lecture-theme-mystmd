@@ -1,0 +1,74 @@
+# The rendered checks of the theme-parity harness (QuantEcon/project-theme-parity#15, decision D9): Playwright, in
+# tests/harness/, against the site this run built, served under the path it was built for. ci.yml (and, in the
+# Sphinx corpus, publish.yml) calls it after the build job, with the artefact that holds the built site.
+#
+# A failed check is a row of rendered.csv, not a red job. This job fails only when the harness itself does: the
+# self-test reads its fixtures wrongly, the site cannot be served, the locator table does not parse, or a check
+# could not run (an `error` row; the rows are still written). Its rows are uploaded as this run's `harness`
+# artefact either way, and the deploy job puts them on the site, under /_harness/, only when this job succeeded.
+#
+# The same file in QuantEcon/test-lecture-theme-sphinx and QuantEcon/test-lecture-theme-mystmd.
+name: Rendered checks
+on:
+  workflow_call:
+    inputs:
+      site-artifact:
+        description: The name of this run's artefact that holds the built site
+        type: string
+        required: true
+      base-path:
+        description: The path the built site is served under, the one it was built for (`/name/`, or `/`)
+        type: string
+        required: true
+
+jobs:
+  rendered:
+    name: Rendered checks (Playwright)
+    # Outside the build image, which may lack Playwright's browser and its system libraries: the theme's DOM does not
+    # depend on where the checks run, and the build it reads was made in the image
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: tests/harness
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: tests/harness/package-lock.json
+
+      # @playwright/test is pinned by package-lock.json; `playwright install` fetches the Chromium build that version names
+      - name: Install the harness and its browser
+        run: |
+          npm ci --no-fund --no-audit
+          npx playwright install --with-deps chromium
+
+      - name: Download the built site
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.site-artifact }}
+          path: ${{ runner.temp }}/site
+
+      - name: Self-test (the fixtures in tests/harness/selftest/)
+        run: npm run selftest
+
+      - name: Rendered checks
+        env:
+          HARNESS_BASE_PATH: ${{ inputs.base-path }}
+          # the pull request's head, not the merge commit GITHUB_SHA names on a pull request
+          HARNESS_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node run.mjs --dir "$RUNNER_TEMP/site" --base-path "$HARNESS_BASE_PATH" --out "$GITHUB_WORKSPACE/_harness"
+
+      - name: Upload the rows (_harness/)
+        if: ${{ !cancelled() && hashFiles('_harness/rendered.csv') != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: harness
+          path: _harness/
+          if-no-files-found: error
+          retention-days: 30

@@ -1,0 +1,15 @@
+{
+  "name": "test-lecture-theme-mystmd-harness",
+  "private": true,
+  "description": "The rendered checks of the theme-parity harness (QuantEcon/project-theme-parity#15) for this corpus: Playwright against this repository's own build",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "selftest": "node selftest/run.mjs",
+    "measure": "node run.mjs"
+  },
+  "dependencies": {
+    "@playwright/test": "1.63.0",
+    "yaml": "2.9.1"
+  }
+}

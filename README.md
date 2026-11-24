@@ -2,7 +2,7 @@
 
 *The QuantEcon theme-parity corpus built on the mystmd stack: the same content as [`test-lecture-theme-sphinx`](https://github.com/QuantEcon/test-lecture-theme-sphinx), built with the QuantEcon mystmd fork and `quantecon-theme.mystmd`, so the two renderings can be compared feature by feature.*
 
-Last updated: 2026-11-22
+Last updated: 2026-11-24
 
 > **This is a test repository.** Nothing here is a lecture. Do not link to it from a lecture site.
 
@@ -43,6 +43,24 @@ cd lectures && myst build --html --execute
 The code cells execute in the `quantecon` conda environment of the image CI builds in — `ghcr.io/quantecon/quantecon-build`, pinned by digest in `.github/workflows/ci.yml` — the same image the Sphinx corpus uses, so the two corpora run one kernel (theme-parity decision D14). Locally, build inside that image, or create the environment from `containers/quantecon-build/environment.yml` in QuantEcon/actions. Node 24 runs the engine.
 
 `myst start` serves the site with hot reload. The theme is a pinned release zip (`site.template` in `myst.yml`, v3.2.1, which renders `collapse-N` and `collapse-output-N` behind an Expand / Collapse bar); the git-history header needs a full-depth checkout.
+
+## The rendered checks
+
+`tests/harness/` is a Playwright project that checks this corpus's own build for the parity harness's rendered layer (QuantEcon/project-theme-parity#15, D9; QuantEcon/test-lecture-theme-mystmd#2): every site feature in its locator table, a copy of this theme's side of the harness's `bin/site-features.yml`, in light and dark, and every page at three viewports for error markers, console errors and sideways scrolling. CI runs it after the build (the `rendered` job of `ci.yml`, on every event, the site served at the base it was built with) and uploads the results as the run's `harness` artefact; the deploy puts them on the site at `/_harness/rendered.csv` and `/_harness/provenance.json` when the checks succeeded, and deploys without them when they did not. `tests/harness/README.md` says how to run it and what each check does.
+
+`rendered.csv` has the same columns and vocabulary in both corpora, so the harness can join their rows on `page, family, check, viewport, scheme`:
+
+| Column | Holds |
+| --- | --- |
+| `page` | the page's Sphinx name (`code_cells`), on both sites |
+| `family` | the site feature's id, or `page` for the page-wide checks |
+| `check` | `present` (the feature's locator matches), `behaviour` (its behaviour holds), `error-marker`, `console` or `overflow` (page-wide) |
+| `viewport` | `desktop` (1280), `wide` (1440), `tablet` (820) or `phone` (390) |
+| `scheme` | `light` or `dark` |
+| `result` | `pass`; `fail`; `absent` (the locator matched nothing); `none` (no locator: this site has no counterpart); `skip` (the check could not decide, and `detail` says what a person looks at instead); `error` (the check could not run) |
+| `detail` | the evidence: a count, what the behaviour did, a message, a URL and what it answered |
+
+A failed check is a row, not a failed job: the job fails only when the harness itself does (its self-test, an unparsable locator table, a site it cannot serve, or a check that could not run).
 
 ## Relationship to other repositories
 
