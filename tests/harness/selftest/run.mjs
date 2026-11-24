@@ -29,7 +29,7 @@ const write = process.argv.includes("--print"); // print each site's rows as CSV
 async function check(name, table) {
   const server = await serve(join(HERE, name), theme.basePath);
   try {
-    const site = { mode: "dir", base: server.base, url: server.url, origin: new URL(server.url).origin, publishedBase: theme.publishedBase };
+    const site = { mode: "dir", base: server.base, url: server.url, origin: new URL(server.url).origin, publishedBase: new URL(server.base, theme.publishedBase).href };
     const { rows } = await runChecks({ theme, table, site, order: PAGES, jobs: 4 });
     if (write) { process.stdout.write(`--- ${name}\n${toCsv(rows)}`); return 0; }
     const want = parseCsv(await readFile(join(HERE, `expected-${name}.csv`), "utf8"));

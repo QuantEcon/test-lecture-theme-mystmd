@@ -112,7 +112,9 @@ async function main() {
     site = { mode: "url", base: u.pathname, url: u.href };
   }
   site.origin = new URL(site.url).origin;
-  site.publishedBase = theme.publishedBase;
+  // the page's own address, for page-meta: the published site's origin, with the base this build is served at (a
+  // mystmd pull request's build is made for /, and its canonical links say so)
+  site.publishedBase = new URL(site.base, theme.publishedBase).href;
 
   // a site that does not answer is not a site to check
   try {

@@ -95,7 +95,10 @@ const behaviours = {
     const o = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }));
     const detail = `visible in the toolbar: ${actions.join(", ")}; in the menu: ${inMenu.join(", ") || "nothing"}; the contents drawer opens: ${yes(opened)}; `
       + `the page ${o.sw > o.cw ? `scrolls sideways (scrollWidth ${o.sw} > clientWidth ${o.cw})` : `fits (scrollWidth ${o.sw})`}`;
-    return opened && o.sw <= o.cw ? pass(detail) : fail(detail);
+    const result = opened && o.sw <= o.cw ? pass : fail;
+    // the result is the drawer and the width; whether every action the Sphinx site offers at 390px is reachable is a
+    // comparison of the two sites' lists, for a person
+    return result(`${detail}. The drawer and the width decide this row; a person compares the action lists with the other site's`);
   },
 
   async "contents-drawer"(c) {
