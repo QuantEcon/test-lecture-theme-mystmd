@@ -15,9 +15,9 @@ node run.mjs --dir ../../lectures/_build/html --base-path /    # a site built wi
 node run.mjs --url https://quantecon.github.io/test-lecture-theme-mystmd/   # the live site
 ```
 
-Both ways write `_harness/rendered.csv` and `_harness/provenance.json` at the repository root (`--out` to change it) and print the counts by check and result. A built site is served at the base it was built with. `myst build` bakes `BASE_URL` into the site: `ci.yml` sets it to `/test-lecture-theme-mystmd` on a push to `main` and leaves it empty on a pull request, so a push's build is served at `/test-lecture-theme-mystmd/` and a pull request's at `/`, and `provenance.json` records which. `run.mjs` stops (exit 2) when the build's home page asks for assets outside the base it was given. `--only id,id` runs those features alone, `--pages stem,stem` those pages, and `--no-pages` leaves out the page-wide checks.
+Both ways write `_harness/rendered.csv` and `_harness/provenance.json` at the repository root (`--out` to change it) and print the counts by check and result. A built site is served at the base it was built with. `myst build` bakes `BASE_URL` into the site: `ci.yml` sets it to `/test-lecture-theme-mystmd` on a push to `main` and leaves it empty on a pull request, so a push's build is served at `/test-lecture-theme-mystmd/` and a pull request's at `/`, and `provenance.json` records which. `run.mjs` stops (exit 2) when the build's home page asks for assets outside the base it was given. `--only id,id` runs those features alone, `--pages stem,stem` gives the page-wide checks those pages only (the behaviours still read the whole site's order), and `--no-pages` leaves out the page-wide checks.
 
-The exit status: 0 when every check ran, whatever it found; 1 when a check could not run (an `error` row, which is still written); 2 when nothing was checked (a bad argument, a locator table that does not parse, a site that cannot be served or does not answer).
+The exit status: 0 when every check ran, whatever it found; 1 when a check could not run (an `error` row, which is still written); 2 when nothing was checked (a bad argument, a locator table that does not parse, a site that cannot be served or does not answer, or a build made for another base: its home page's canonical link, or an asset it asks for, puts it somewhere other than the base it was given).
 
 ## What it checks
 
@@ -26,7 +26,7 @@ The exit status: 0 when every check ran, whatever it found; 1 when a check could
 
 **The colour scheme.** The theme takes its scheme from `@myst-theme/site`: on a static build it reads `localStorage` `myst:theme` first and, without one, follows `prefers-color-scheme` (`useTheme`, and the `BlockingThemeLoader` before hydration). Each context emulates the preference and leaves the key unset, as for a reader who has not chosen, and before any check runs, the harness confirms the scheme took effect (`html.dark` in dark, not in light); a page where it did not gives `error` rows. mystmd highlights code after hydration, so a page is read a second after network idle, once the document stops changing.
 
-A check result is data: a failed feature check, a marker, a console message or an overflow is a row, not a failed job.
+A check result is data: a failed feature check, a marker, a console message or an overflow is a row, not a failed job. So is a control a behaviour has to operate and cannot, because it is not shown or will not take the click: that is `fail`, with the control named, where a behaviour that throws for any other reason is `error`. Links are fetched from the browser's context, each URL once a run; a link that gets no answer (no connection, a 429 rate limit or a 5xx, after two more tries) leaves its check `skip`, for a person, rather than `fail`.
 
 ## rendered.csv
 
@@ -51,7 +51,7 @@ One row per check, with the columns of QuantEcon/project-theme-parity#15, the sa
 | `skip` | the check ran but could not decide; `detail` says why, and what a person has to look at instead |
 | `error` | the check could not run: it threw, the page did not load, or the colour scheme did not take effect |
 
-`present` counts every part of a locator, as `<matched> (<visible> visible)`, and the first part decides `pass` or `absent`. The rows come in a fixed order: the features in the table's order (light, then dark; `present`, then `behaviour`), then the pages in the site's order (`lectures/myst.yml`).
+`present` counts every part of a locator, as `<matched> (<visible> visible)`, and the first part decides `pass` or `absent`: the locator matching, as the parity harness's rule reads it. Whether the match is shown is in the detail, not the result, since a head element (the canonical link, the favicon, `rel="prev"`) is never shown and some controls show only on hover or scroll; a control a behaviour needs and cannot find shown fails that behaviour. The rows come in a fixed order: the features in the table's order (light, then dark; `present`, then `behaviour`), then the pages in the site's order (`lectures/myst.yml`).
 
 ## provenance.json
 

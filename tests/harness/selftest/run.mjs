@@ -30,7 +30,7 @@ async function check(name, table) {
   const server = await serve(join(HERE, name), theme.basePath);
   try {
     const site = { mode: "dir", base: server.base, url: server.url, origin: new URL(server.url).origin, publishedBase: theme.publishedBase };
-    const { rows } = await runChecks({ theme, table, site, pages: PAGES, jobs: 4 });
+    const { rows } = await runChecks({ theme, table, site, order: PAGES, jobs: 4 });
     if (write) { process.stdout.write(`--- ${name}\n${toCsv(rows)}`); return 0; }
     const want = parseCsv(await readFile(join(HERE, `expected-${name}.csv`), "utf8"));
     const got = new Map(rows.map((r) => [keyOf(r), r]));

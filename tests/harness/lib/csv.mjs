@@ -11,13 +11,15 @@ export const COLUMNS = ["page", "family", "check", "viewport", "scheme", "result
 export const CHECKS = ["present", "behaviour", "error-marker", "console", "overflow"];
 
 // What the check found. Closed: anything else is a bug in the harness.
-//   pass    the check ran and held
-//   fail    the check ran and did not hold: a behaviour failed, or a marker, console message or overflow was found
+//   pass    the check ran and held; for `present`, the locator matched (how many of its matches are shown is in
+//           `detail`: a head element is never shown, and a control may show only on hover or scroll)
+//   fail    the check ran and did not hold: a behaviour failed (a control it must operate not shown or not pressable
+//           included), or a marker, console message or overflow was found
 //   absent  `present` only: the locator matched nothing
 //   none    no locator: this site has no counterpart (`null` in the locator table); on `present` and `behaviour`
 //   skip    the check ran but could not decide; `detail` says why, and what a person has to look at instead
-//   error   the check could not run: it threw, the page did not load, or the colour scheme did not take effect.
-//           The run writes the row, and then exits 1, so the job fails
+//   error   the check could not run: it threw unexpectedly, the page did not load, or the colour scheme did not take
+//           effect. The run writes the row, and then exits 1, so the job fails
 export const RESULTS = ["pass", "fail", "absent", "none", "skip", "error"];
 
 export const VIEWPORT_NAMES = ["desktop", "wide", "tablet", "phone"];

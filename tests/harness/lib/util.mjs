@@ -14,7 +14,7 @@ export const PAGE_VIEWPORTS = ["desktop", "tablet", "phone"];
 
 /** One line, at most `max` characters, for a CSV detail. */
 export function oneLine(s, max = 400) {
-  const t = String(s ?? "").replace(/\s+/g, " ").trim();
+  const t = String(s ?? "").replace(/\u001b\[[0-9;]*[A-Za-z]/g, "").replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, "").replace(/\s+/g, " ").trim();
   return t.length > max ? `${t.slice(0, max - 1)}…` : t;
 }
 
@@ -87,34 +87,39 @@ export function describeCounts(counts) {
   return counts.map((c) => `${c.name ? `${c.name} ` : ""}${c.matched} (${c.visible} visible)`).join("; ");
 }
 
-const answers = new Map(); // one answer per URL for the run: fewer requests, to github.com above all
+const answers = new Map(); // one result per URL for the run: fewer requests (to github.com above all), and a host that
+                           // does not answer costs its time once, not once per check
 
 /** Did the request get an answer about the link? Not when it failed to connect, was rate-limited (429) or hit a 5xx. */
 export const answered = (r) => r.status > 0 && r.status !== 429 && r.status < 500;
 
 /**
  * Fetch `url` from the page's browser context, following redirects; on a 429 or a 5xx, or a failure to connect, twice
- * more, after its Retry-After (at most 20 s) or 3 s and 6 s. Resolves to { status, url, error, body? }; status 0 when
- * no answer came. An answer is kept for the rest of the run, so each URL is asked for once.
+ * more, after its Retry-After (at most 10 s) or 3 s and 6 s, each try given 15 s: at most about a minute for a host
+ * that never answers. Resolves to { status, url, error, body? }; status 0 when no answer came. The result, answered
+ * or not, is kept for the rest of the run, so each URL is asked for once.
  */
 export async function fetchUrl(page, url, { body = false, method = "GET" } = {}) {
   const key = `${method} ${url}${body ? " +body" : ""}`;
-  if (answers.has(key)) return answers.get(key);
-  let last = "";
+  if (!answers.has(key)) answers.set(key, fetchOnce(page, url, body, method));
+  return answers.get(key);
+}
+
+async function fetchOnce(page, url, body, method) {
+  let out;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const r = await page.context().request.fetch(url, { method, maxRedirects: 10, failOnStatusCode: false, timeout: 30_000 });
-      const status = r.status();
-      const out = { status, url: r.url(), body: body ? await r.text() : undefined, retried: attempt > 1 };
-      if (answered(out)) { answers.set(key, out); return out; }
-      if (attempt === 3) return out;
-      await sleep(Math.min(20, Number(r.headers()["retry-after"]) || 3 * attempt) * 1000);
+      const r = await page.context().request.fetch(url, { method, maxRedirects: 10, failOnStatusCode: false, timeout: 15_000 });
+      out = { status: r.status(), url: r.url(), body: body ? await r.text().catch(() => "") : undefined, retried: attempt > 1 };
+      if (answered(out) || attempt === 3) return out;
+      await sleep(Math.min(10, Number(r.headers()["retry-after"]) || 3 * attempt) * 1000);
     } catch (e) {
-      last = oneLine(e.message, 160);
-      if (attempt === 3) return { status: 0, url, error: last };
+      out = { status: 0, url, error: oneLine(e.message, 160) };
+      if (attempt === 3) return out;
       await sleep(3000 * attempt);
     }
   }
+  return out;
 }
 
 /** "a.b/c answers 200" for a detail, the URL shortened. */
@@ -130,6 +135,31 @@ export async function withTimeout(ms, fn, what) {
   try {
     return await Promise.race([fn(), new Promise((_, fail) => { timer = setTimeout(() => fail(new Error(`${what} took longer than ${ms / 1000} s`)), ms); })]);
   } finally { clearTimeout(timer); }
+}
+
+/**
+ * A behaviour that meets the site in a state it cannot go on from (a control not shown, or not pressable, or a step
+ * that leads nowhere) throws this: the row is `fail`, a fact about the site, where any other throw is an `error`,
+ * a check that could not run.
+ */
+export class SiteFault extends Error {}
+
+/**
+ * Press a control as a reader would: it must be shown within 5 s and take the click within 10 s, else a SiteFault
+ * says which. `target` is a Locator (its first match) or an ElementHandle.
+ */
+export async function press(target, what, { button, force, timeout = 10_000 } = {}) {
+  const el = typeof target.first === "function" ? target.first() : target;
+  const shown = typeof el.waitFor === "function"
+    ? await el.waitFor({ state: "visible", timeout: 5000 }).then(() => true, () => false)
+    : await el.waitForElementState("visible", { timeout: 5000 }).then(() => true, () => false);
+  if (!shown && !force) throw new SiteFault(`${what} is not shown, so it cannot be operated`);
+  try {
+    await el.click({ timeout, ...(button ? { button } : {}), ...(force ? { force } : {}) });
+  } catch (e) {
+    if (e?.name === "TimeoutError") throw new SiteFault(`${what} could not be pressed: ${oneLine(String(e.message).split("\n")[0], 160)}`);
+    throw e;
+  }
 }
 
 export { sleep };

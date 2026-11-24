@@ -2,7 +2,7 @@
 // Each resolves to { result: "pass" | "fail" | "skip", detail }; a throw becomes an `error` row.
 //
 // This file is the same in QuantEcon/test-lecture-theme-sphinx and QuantEcon/test-lecture-theme-mystmd.
-import { answered, oneLine, said, sleep } from "./util.mjs";
+import { SiteFault, answered, oneLine, press, said, sleep } from "./util.mjs";
 
 export const pass = (detail) => ({ result: "pass", detail });
 export const fail = (detail) => ({ result: "fail", detail });
@@ -25,7 +25,7 @@ const word = (dark) => (dark ? "dark" : "light");
 export async function darkModeFlow(c, { toggle = "toggle", dark }) {
   const { page } = c;
   const start = await darkNow(page, dark);
-  await c.part(toggle).first().click();
+  await press(c.part(toggle), "the toggle");
   await sleep(500);
   const choice = !start;
   if ((await darkNow(page, dark)) !== choice) return fail(`the toggle did not switch the page: it stayed ${word(start)}`);
@@ -52,11 +52,11 @@ export async function fullscreenFlow(c, label) {
   const { page } = c;
   const el = await c.part().first().elementHandle();
   const before = await label(el);
-  await el.click();
+  await press(el, "the full-screen control");
   await sleep(700);
   const entered = await page.evaluate(() => !!document.fullscreenElement);
   const between = await label(el);
-  await el.click();
+  await press(el, "the full-screen control, the second time");
   await sleep(700);
   const left = await page.evaluate(() => !document.fullscreenElement);
   const detail = `first press: full screen ${entered ? "entered" : "not entered"}; second press, on the same element: `
@@ -73,7 +73,7 @@ export async function fontSizeFlow(c, { increase = "increase", text }) {
   }, text);
   const before = await size();
   if (before == null) return skip(`no text to measure (${text})`);
-  await c.part(increase).first().click();
+  await press(c.part(increase), "the increase control");
   await sleep(500);
   const after = await size();
   if (!(after > before)) return fail(`one press of increase left the text at ${before}px`);
@@ -164,11 +164,11 @@ export async function clipboard(page) {
 export async function collapseFlow(c, block, bar) {
   const h = () => block.evaluate((e) => Math.round(e.getBoundingClientRect().height));
   const capped = await h();
-  await bar.scrollIntoViewIfNeeded();
-  await bar.click();
+  await bar.scrollIntoViewIfNeeded().catch(() => {});
+  await press(bar, "the bar");
   await sleep(700);
   const expanded = await h();
-  await bar.click();
+  await press(bar, "the bar, the second time");
   await sleep(900);
   const again = await h();
   const detail = `on load ${capped}px; after the bar ${expanded}px; after a second press ${again}px`;
@@ -228,7 +228,7 @@ export async function launchTargets(c, targets) {
   let ok = true;
   for (const o of targets) {
     const notebook = notebookOf(o.url);
-    const r = await c.fetch(notebook);
+    const r = await c.fetch(notebook); // a notebook two targets name is fetched once (fetchUrl keeps each result)
     const names = notebook.split(/[?#]/)[0].endsWith(`/${nb}`);
     ok &&= names && r.status === 200;
     results.push(r);
@@ -284,7 +284,7 @@ async function referencesFlow(c) {
 }
 
 export function commonBehaviours(p) {
-  return {
+  const out = {
     fullscreen: (c) => fullscreenFlow(c, (el) => el.evaluate((e) => e.getAttribute("aria-label") || e.getAttribute("data-tippy-content") || e.textContent.trim())),
 
     "font-size": (c) => fontSizeFlow(c, { increase: "increase", text: p.para }),
@@ -293,7 +293,9 @@ export function commonBehaviours(p) {
 
     async "dark-palette"(c) {
       const col = await colours(c.page, { surface: p.text, text: p.para, link: `${p.para} a` });
-      return skip(`${c.scheme}: page ${col.page}, text ${col.text}, link ${col.link}. No palette is expected until QuantEcon/quantecon-theme.mystmd#237 decides one; a person compares the two schemes in the visual layer`);
+      const seen = `page ${col.page}, text ${col.text}, link ${col.link}`;
+      if (c.scheme === "light") return skip(`the feature is the dark scheme's: its locator, the dark marker, is absent in light by design. The light colours, for the visual layer's before and after: ${seen}`);
+      return skip(`dark: ${seen}. No palette is expected until QuantEcon/quantecon-theme.mystmd#237 decides one; a person compares the two schemes in the visual layer`);
     },
 
     async "edit-on-github"(c) {
@@ -337,7 +339,7 @@ export function commonBehaviours(p) {
       const start = page.url();
       const link = c.part().first();
       const href = await link.getAttribute("href");
-      await link.click();
+      await press(link, `the outline entry "${href}"`);
       await sleep(900);
       const followed = page.url();
       await page.goBack();
@@ -369,8 +371,7 @@ export function commonBehaviours(p) {
       await page.evaluate(() => window.scrollTo(0, Math.min(4000, document.documentElement.scrollHeight - innerHeight)));
       await sleep(1200);
       const link = c.part().first();
-      if (!(await link.isVisible())) return fail("scrolled down, the link did not show");
-      await link.click();
+      await press(link, "scrolled down, the link");
       await sleep(1500);
       const t = await page.evaluate(() => { const e = document.getElementById("top"); if (!e) return null; const r = e.getBoundingClientRect(); return { top: Math.round(r.top), y: Math.round(scrollY), h: innerHeight }; });
       if (!t) return fail("followed it; the page has no #top");
@@ -379,7 +380,7 @@ export function commonBehaviours(p) {
     },
 
     async "last-changed"(c) {
-      await c.part("toggle").first().click();
+      await press(c.part("toggle"), "the Last changed control");
       await sleep(800);
       const panel = c.part("panel").first();
       const shown = await panel.isVisible();
@@ -421,15 +422,19 @@ export function commonBehaviours(p) {
     },
 
     async favicon(c) {
+      // "The page's icon link": where a page has several, browsers take the last (quantecon-theme.mystmd writes its
+      // base-path link after the root route's for that reason), so that one decides; the others are recorded
       const hrefs = await c.part().evaluateAll((ls) => ls.map((l) => l.getAttribute("href")));
       const words = [], results = [];
       for (const h of hrefs) {
         const u = new URL(h, c.page.url()).href;
         const r = await c.fetch(u);
-        results.push(r);
+        results.push({ ...r, under: u.startsWith(c.site.url) });
         words.push(`"${h}": ${said(u, r)}${u.startsWith(c.site.url) ? "" : ", outside the site's base"}`);
       }
-      return verdictOf(words.join("; "), results);
+      const used = results[results.length - 1];
+      const detail = hrefs.length > 1 ? `the icon link a browser uses, the last of ${hrefs.length}: ${words[words.length - 1]}; also ${words.slice(0, -1).join("; ")}` : words.join("; ");
+      return verdictOf(detail, [used], used.status === 200 && used.under);
     },
 
     async "static-assets"(c) {
@@ -453,7 +458,7 @@ export function commonBehaviours(p) {
       if (n.all) {
         const first = page.locator(p.maths.all).first();
         await first.scrollIntoViewIfNeeded();
-        await first.click({ button: "right" });
+        await press(first, "the first expression", { button: "right" });
         await sleep(800);
         if (p.maths.menu) {
           menu = await page.locator(p.maths.menu).first().isVisible().catch(() => false);
@@ -477,4 +482,6 @@ export function commonBehaviours(p) {
       return text?.shown && !text.cut ? pass(detail) : fail(detail);
     },
   };
+  out["dark-palette"].withoutElement = true;
+  return out;
 }

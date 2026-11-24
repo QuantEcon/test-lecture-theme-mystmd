@@ -10,7 +10,8 @@
 // Exit 2: nothing was checked (a bad argument, a locator table that does not parse, a site that cannot be served).
 //
 // Options: --out DIR, --jobs N (default 4), --table FILE (default locators.yml), --only id,id (those features only),
-// --pages stem,stem (those pages only), --no-pages (no page-wide checks), --quiet.
+// --pages stem,stem (the page-wide checks on those pages only; the behaviours still read the whole site's order),
+// --no-pages (no page-wide checks), --quiet.
 // HARNESS_CHROMIUM=<path> runs another Chromium build than the one Playwright installed.
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -67,14 +68,23 @@ async function buildInfoCommit(url) {
   } catch (e) { return { url, error: String(e.message ?? e) }; }
 }
 
-/** A root-absolute asset URL in the built home page that is not under the base: the build was made for another base. */
-async function checkBase(dir, base) {
+/**
+ * Was the build made for this base? Its home page's canonical link names the path the build puts it at, and its
+ * root-absolute asset URLs must lie under the base. A reason when not, else null.
+ */
+async function checkBase(dir, base, first) {
   let html = "";
   for (const f of theme.homeFiles) { try { html = await readFile(join(dir, f), "utf8"); break; } catch {} }
-  if (!html) return null;
+  if (!html) return `it has no home page (${theme.homeFiles.join(", ")})`;
+  const norm = (p) => p.replace(/index\.html$/, "").replace(/\/+$/, "") || "/";
+  const canonical = [...html.matchAll(/<link\b[^>]*>/g)].map((m) => m[0]).find((t) => /\brel=["']canonical["']/.test(t))?.match(/\bhref=["']([^"']+)["']/)?.[1];
+  if (canonical) {
+    const at = norm(new URL(canonical, "https://x.invalid/").pathname), want = norm(base + theme.pagePath(first));
+    if (at !== want) return `its home page's canonical link (${canonical}) puts it at ${at}, not ${want}`;
+  }
   const urls = [...html.matchAll(/<(?:link|script)\b[^>]*?\b(?:href|src)="(\/[^"/][^"]*)"/g)].map((m) => m[1]);
   const bad = urls.filter((u) => !u.startsWith(base) && !theme.escapesBase(u));
-  return bad.length ? bad.slice(0, 3) : null;
+  return bad.length ? `its home page asks for ${bad.slice(0, 3).join(", ")}, outside it` : null;
 }
 
 async function main() {
@@ -84,13 +94,16 @@ async function main() {
 
   let table;
   try { table = await readTable(o.table, theme.side); } catch (e) { console.error(`run.mjs: the locator table does not parse: ${e.message}`); return 2; }
-  const pages = o.pages ?? (await theme.pages(REPO));
+  const order = await theme.pages(REPO);
+  const unknownPages = (o.pages ?? []).filter((p) => !order.includes(p));
+  if (unknownPages.length) { console.error(`run.mjs: --pages names pages this site does not have: ${unknownPages.join(", ")}`); return 2; }
+  const pages = o.pages ?? order;
 
   let site, server = null;
   if (o.dir) {
     const base = normaliseBase(o.basePath ?? theme.basePath);
-    const wrong = await checkBase(o.dir, base);
-    if (wrong) { console.error(`run.mjs: ${o.dir} was not built for the base ${base}: its home page asks for ${wrong.join(", ")}`); return 2; }
+    const wrong = await checkBase(o.dir, base, order[0]);
+    if (wrong) { console.error(`run.mjs: ${o.dir} was not built for the base ${base}: ${wrong}`); return 2; }
     try { server = await serve(o.dir, base); } catch (e) { console.error(`run.mjs: cannot serve ${o.dir}: ${e.message}`); return 2; }
     site = { mode: "dir", dir: resolve(o.dir), base, url: server.url };
   } else {
@@ -103,14 +116,14 @@ async function main() {
 
   // a site that does not answer is not a site to check
   try {
-    const home = await fetch(site.url + theme.pagePath(pages[0]));
-    if (!home.ok) throw new Error(`${site.url + theme.pagePath(pages[0])} answered ${home.status}`);
+    const home = await fetch(site.url + theme.pagePath(order[0]));
+    if (!home.ok) throw new Error(`${site.url + theme.pagePath(order[0])} answered ${home.status}`);
   } catch (e) { console.error(`run.mjs: the site does not answer: ${e.message}`); await server?.close(); return 2; }
 
   const started = new Date();
   let done = 0;
   const { rows, browserVersion } = await runChecks({
-    theme, table, site, pages, jobs: o.jobs, only: o.only, pageChecks: o.pageChecks,
+    theme, table, site, order, pages, jobs: o.jobs, only: o.only, pageChecks: o.pageChecks,
     onTask: (what, r) => { done++; if (!o.quiet) console.error(`[${done}] ${what}: ${r.map((x) => `${x.check} ${x.result}`).join(", ")}`); },
   });
   const buildInfo = await buildInfoCommit(site.url + theme.pagePath(theme.buildInfoPage));
@@ -136,7 +149,8 @@ async function main() {
       build_info: buildInfo,
     },
     locators: { file: relative(REPO, o.table), copied_from: table.source, corrections: table.corrections },
-    pages,
+    pages: order,
+    ...(o.pages ? { page_checks_on: pages } : {}),
     viewports: Object.fromEntries(Object.entries(VIEWPORTS).map(([k, v]) => [k, `${v.width}x${v.height}`])),
     page_viewports: PAGE_VIEWPORTS,
     schemes: theme.schemeHow,

@@ -6,7 +6,7 @@ typography,dark-mode,behaviour,desktop,light,fail,the toggle did not switch the 
 typography,dark-mode,present,desktop,dark,pass,toggle 1 (1 visible); dark 1 (1 visible)
 typography,dark-mode,behaviour,desktop,dark,fail,the toggle did not switch the page
 typography,dark-palette,present,desktop,light,absent,0 (0 visible)
-typography,dark-palette,behaviour,desktop,light,skip,nothing to exercise
+typography,dark-palette,behaviour,desktop,light,skip,absent in light by design
 typography,dark-palette,present,desktop,dark,pass,1 (1 visible)
 typography,dark-palette,behaviour,desktop,dark,skip,No palette is expected
 code_cells,stderr-fold,present,desktop,light,pass,1 (1 visible)

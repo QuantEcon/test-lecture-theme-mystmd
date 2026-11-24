@@ -8,7 +8,7 @@
 // error marker looks like, and how each feature's behaviour is exercised.
 import { chromium } from "@playwright/test";
 import { SCHEMES } from "./csv.mjs";
-import { PAGE_VIEWPORTS, VIEWPORTS, countParts, describeCounts, fetchUrl, load, oneLine, partsOf, withTimeout } from "./util.mjs";
+import { PAGE_VIEWPORTS, VIEWPORTS, SiteFault, countParts, describeCounts, fetchUrl, load, oneLine, partsOf, withTimeout } from "./util.mjs";
 
 const HYDRATION = /hydrat|did not match|server rendered HTML|Minified React error #(418|419|421|422|423|425)/i;
 
@@ -97,7 +97,8 @@ async function featureTask(browser, run, f, scheme) {
         res = await withTimeout(120_000, () => impl(c), "the behaviour");
         if (!res || !["pass", "fail", "skip", "error"].includes(res.result)) throw new Error(`the behaviour gave no result (${JSON.stringify(res)})`);
       } catch (e) {
-        res = { result: "error", detail: `the behaviour threw: ${oneLine(e.message, 240)}` };
+        res = e instanceof SiteFault ? { result: "fail", detail: oneLine(e.message, 400) }
+          : { result: "error", detail: `the behaviour threw: ${oneLine(e.message, 240)}` };
       }
     }
     rows.push({ ...base, check: "behaviour", result: res.result, detail: oneLine(res.detail, 600) });
@@ -160,13 +161,15 @@ async function pool(tasks, jobs) {
 
 /**
  * Run every check. `site` is { url, origin, publishedBase, mode, base }: `url` the site's base URL, ending in "/".
+ * `order` is every page of the site in its order, which the behaviours read (another page, previous and next, the
+ * contents); `pages` the pages to give the page-wide checks, by default all of them.
  * Resolves to { rows, browserVersion }, the rows in the order: features in the table's order (light, then dark;
  * present, then behaviour), then pages in the site's order (desktop, tablet, phone; light, then dark).
  */
-export async function runChecks({ theme, table, site, pages, jobs = 4, only = null, pageChecks = true, onTask = () => {} }) {
+export async function runChecks({ theme, table, site, order, pages = order, jobs = 4, only = null, pageChecks = true, onTask = () => {} }) {
   const browser = await chromium.launch(process.env.HARNESS_CHROMIUM ? { executablePath: process.env.HARNESS_CHROMIUM } : {});
-  site = { ...site, pages };
-  const run = { theme, site, pages };
+  site = { ...site, pages: order };
+  const run = { theme, site };
   try {
     const tasks = [];
     for (const f of table.features) {

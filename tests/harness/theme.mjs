@@ -4,7 +4,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import YAML from "yaml";
-import { settleBase, stableDom, oneLine, said, sleep } from "./lib/util.mjs";
+import { press, settleBase, stableDom, oneLine, said, sleep } from "./lib/util.mjs";
 import { MARKER_NAMES, errorMarkers } from "./lib/markers.mjs";
 import * as B from "./lib/behave.mjs";
 const { pass, fail, skip, yes } = B;
@@ -28,8 +28,8 @@ const profile = {
 
 
 /** Open a Radix menu by its trigger and read its links; Escape closes it again. */
-async function menuLinks(c, trigger, items = '[role="menu"] a[href]') {
-  await trigger.click();
+async function menuLinks(c, trigger, items = '[role="menu"] a[href]', what = "the menu control") {
+  await press(trigger, what);
   await sleep(700);
   const links = await c.page.locator(items).evaluateAll((as) => as.map((a) => ({ label: a.textContent.trim(), href: a.getAttribute("href") })));
   const open = await c.page.locator('[role="menu"]').count();
@@ -49,14 +49,14 @@ const behaviours = {
     if (href) targets = [{ label: "the launch link", url: new URL(href, c.page.url()).href }];
     else {
       const trigger = el.locator("button").first();
-      const m = await menuLinks(c, (await trigger.count()) ? trigger : el);
+      const m = await menuLinks(c, (await trigger.count()) ? trigger : el, undefined, "the launch control");
       targets = m.links.map((l) => ({ label: l.label || "a launch link", url: new URL(l.href, c.page.url()).href }));
     }
     return B.launchTargets(c, targets);
   },
 
   async "download-notebook"(c) {
-    const m = await menuLinks(c, c.part("control").first(), c.selector("items"));
+    const m = await menuLinks(c, c.part("control").first(), c.selector("items"), "the downloads control");
     if (!m.open) return fail("the downloads control opened no menu");
     if (!m.links.length) return fail("the downloads menu opens empty: a downloads control with nothing in it (QuantEcon/quantecon-theme.mystmd#212)");
     return B.downloadLinks(c, m.links.map((l) => l.href));
@@ -64,7 +64,7 @@ const behaviours = {
 
   async search(c) {
     const { page } = c;
-    await c.part().first().click();
+    await press(c.part(), "the search control");
     const input = page.locator(".myst-search-dialog input").first();
     await input.waitFor({ state: "visible", timeout: 5000 }).catch(() => {});
     if (!(await input.isVisible())) return fail("the search control opened no input");
@@ -87,9 +87,9 @@ const behaviours = {
         return x?.getAttribute("aria-label") || li.querySelector("img[alt]")?.getAttribute("alt") || li.textContent.trim();
       }).filter(Boolean);
     });
-    const m = await menuLinks(c, c.part("menu").first(), '[role="menu"] li');
+    const m = await menuLinks(c, c.part("menu").first(), '[role="menu"] li', "the More actions menu");
     const inMenu = m.links.map((l) => l.label).filter(Boolean);
-    await c.part("contents").first().click();
+    await press(c.part("contents"), "the contents control");
     await sleep(900);
     const opened = await page.evaluate(() => { const t = document.querySelector("#qe-toc"); return !!t && t.matches(":popover-open") && t.getBoundingClientRect().width > 0; });
     const o = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }));
@@ -100,7 +100,7 @@ const behaviours = {
 
   async "contents-drawer"(c) {
     const { page } = c;
-    await c.part("toggle").first().click();
+    await press(c.part("toggle"), "the contents toggle");
     await sleep(900);
     const entries = await c.part("entries").evaluateAll((as) => as
       .filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && (e.checkVisibility ? e.checkVisibility({ visibilityProperty: true }) : getComputedStyle(e).visibility !== "hidden"); })
@@ -160,7 +160,7 @@ const behaviours = {
         // a linked author is a button that opens a card holding the link (F082)
         const btn = el.locator("button").first();
         if (await btn.count()) {
-          await btn.click();
+          await press(btn, `the author ${name}`);
           await sleep(700);
           href = await page.locator("[data-radix-popper-content-wrapper] a[href]").first().evaluate((a) => a.href).catch(() => null);
           await page.keyboard.press("Escape");
@@ -179,7 +179,7 @@ const behaviours = {
   async "notebook-header"(c) {
     const control = c.page.locator('button[aria-label="Downloads"]').first();
     if (!(await control.count())) return skip("the page has no downloads control, so there is no notebook to read; a person compares the two stacks' notebooks");
-    const m = await menuLinks(c, control);
+    const m = await menuLinks(c, control, undefined, "the downloads control");
     const nb = m.links.find((l) => /\.ipynb(\?|#|$)/.test(l.href));
     if (!nb) return skip(`the site offers no notebook download (the downloads menu holds ${m.links.length ? m.links.map((l) => l.label).join(", ") : "nothing"}), so there is no notebook to read; a person compares the two stacks' notebooks`);
     const u = new URL(nb.href, c.page.url()).href;
@@ -195,9 +195,9 @@ const behaviours = {
     const btn = c.part().first();
     const want = await btn.evaluate((b) => b.closest(".myst-code")?.querySelector("code")?.innerText ?? null);
     await btn.evaluate((b) => b.closest(".myst-code")?.scrollIntoView({ block: "center" }));
-    await btn.locator("xpath=ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' myst-code ')][1]").hover();
+    await btn.locator("xpath=ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' myst-code ')][1]").hover().catch(() => {});
     await sleep(300);
-    await btn.click({ force: true });
+    await press(btn, "the copy button");
     await sleep(600);
     const clip = await B.clipboard(page);
     const norm = (s) => (s ?? "").split("\n").map((l) => l.replace(/\s+$/, "")).join("\n").trim();
@@ -231,7 +231,7 @@ const behaviours = {
       return { open: d.open, shown: drawn && r.width > 0 && r.height > 0 };
     });
     const before = await state();
-    await summary.click();
+    await press(summary, "the stderr toggle");
     await sleep(700);
     const after = await state();
     const detail = `the stderr text on load: ${before.shown ? "shown" : "hidden"}; after the toggle: ${after.shown ? "shown" : "hidden"}`;
