@@ -44,7 +44,9 @@ jobs:
       # corpora's. A difference fails the job on a pull request; on a push it only warns, since one of a sweep's two
       # pull requests always merges first and the twin's main catches up when the other does. Only an answer of 404
       # means "not there": any other failed read (a rate limit, a 5xx, the network) is tried once more and then
-      # reported as unread, which fails a pull request and warns on a push, like a difference.
+      # reported as unread, which fails a pull request and warns on a push, like a difference. On a pull request this
+      # side is the merge with this repository's main, and the twin is read at its branch head, so after an engine
+      # change lands on both mains, update both branches of an open pair before trusting this step.
       - name: The shared engine matches the twin corpus's
         working-directory: .
         env:
@@ -81,7 +83,7 @@ jobs:
             [ "$rc" = 0 ] || unread "main"
           fi
           sha=$(cat "$RUNNER_TEMP/sha")
-          [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || unread "$ref (it gave no commit)"
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || report "The shared engine could not be compared: $twin@$ref gave no commit."
           rc=0; api "$RUNNER_TEMP/twin-lib" "repos/$twin/contents/tests/harness/lib" -f ref="$sha" --jq '.[].name' || rc=$?
           [ "$rc" = 0 ] || unread "tests/harness/lib at $sha"
           libs=$( { (cd tests/harness/lib && ls -1 -- *.mjs); grep '\.mjs$' "$RUNNER_TEMP/twin-lib" || true; } | sort -u)
