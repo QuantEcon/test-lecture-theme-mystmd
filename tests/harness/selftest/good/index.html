@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><link rel="canonical" href="https://quantecon.github.io/test-lecture-theme-mystmd/"><title>Intro — self-test</title>
+<script>/* @myst-theme/site's BlockingThemeLoader: the saved choice, else the preference */
+const saved = localStorage.getItem("myst:theme");
+const pref = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+document.documentElement.classList.add(saved ?? pref);</script>
+<style>body{margin:0;font:16px sans-serif} html.dark body{background:#1c1917;color:#ddd} article main{max-width:800px;margin:0 auto}
+article main p{font-size:18px} .qe-collapse--input .qe-collapse__body{max-height:6em;overflow:hidden}
+.qe-collapse--input[data-expanded="true"] .qe-collapse__body{max-height:none} pre{margin:0}</style></head>
+<body>
+<div><ul><li><button type="button" class="qe-toc-toggle" aria-label="Table of contents">toc</button></li>
+<li><button aria-label="Change contrast">contrast</button></li></ul></div>
+<article class="article content"><main>
+<p>A paragraph of lecture text, long enough to measure, with <a href="../">a link</a>.</p>
+</main></article>
+<script>/* a working toggle: switches the page and keeps the choice */
+document.querySelector('button[aria-label="Change contrast"]').addEventListener("click", function () {
+  const dark = !document.documentElement.classList.contains("dark");
+  document.documentElement.classList.remove("light", "dark");
+  document.documentElement.classList.add(dark ? "dark" : "light");
+  localStorage.setItem("myst:theme", dark ? "dark" : "light");
+});</script>
+</body></html>

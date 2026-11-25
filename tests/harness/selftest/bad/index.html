@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Intro — self-test</title>
+<script>/* this page ignores the theme's scheme (the saved choice, else the preference): it is always light, so in dark
+   the scheme does not take effect */
+document.documentElement.classList.add("light");
+console.warn("Warning: Text content did not match. Server: \"a\" Client: \"b\"");</script>
+<style>body{margin:0;font:16px sans-serif} html.dark body{background:#1c1917;color:#ddd} article main{max-width:800px;margin:0 auto}
+article main p{font-size:18px} .qe-collapse--input .qe-collapse__body{max-height:6em;overflow:hidden}
+.qe-collapse--input[data-expanded="true"] .qe-collapse__body{max-height:none} pre{margin:0}</style></head>
+<body>
+<div><ul><li><button type="button" class="qe-toc-toggle" aria-label="Table of contents">toc</button></li>
+<li><button aria-label="Change contrast">contrast</button></li></ul></div>
+<article class="article content"><main>
+<p>A paragraph of lecture text, long enough to measure, with <a href="../">a link</a>.</p><div style="width:2000px;height:10px;background:#c00"></div>
+</main></article>
+<script>/* a broken toggle: the click does nothing */
+document.querySelector('button[aria-label="Change contrast"]').addEventListener("click", function () {});</script>
+</body></html>

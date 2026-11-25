@@ -1,0 +1,111 @@
+# The rendered checks of the theme-parity harness (QuantEcon/project-theme-parity#15, decision D9): Playwright, in
+# tests/harness/, against the site this run built, served under the path it was built for. ci.yml (and, in the
+# Sphinx corpus, publish.yml) calls it after the build job, with the artefact that holds the built site.
+#
+# A failed check is a row of rendered.csv, not a red job. This job fails only when the harness itself does: the
+# self-test reads its fixtures wrongly, the site cannot be served, the locator table does not parse, or a check
+# could not run (an `error` row; the rows are still written). Its rows are uploaded as this run's `harness`
+# artefact either way, and the deploy job puts them on the site, under /_harness/, only when this job succeeded.
+#
+# The same file in QuantEcon/test-lecture-theme-sphinx and QuantEcon/test-lecture-theme-mystmd.
+name: Rendered checks
+on:
+  workflow_call:
+    inputs:
+      site-artifact:
+        description: The name of this run's artefact that holds the built site
+        type: string
+        required: true
+      base-path:
+        description: The path the built site is served under, the one it was built for (`/name/`, or `/`)
+        type: string
+        required: true
+
+jobs:
+  rendered:
+    name: Rendered checks (Playwright)
+    # Outside the build image, which may lack Playwright's browser and its system libraries: the theme's DOM does not
+    # depend on where the checks run, and the build it reads was made in the image
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: tests/harness
+    steps:
+      - uses: actions/checkout@v7
+
+      # The engine is shared by copy (everything but theme.mjs, locators.yml and the fixtures), so it is compared with
+      # the twin corpus's, read through the API with this job's token (raw.githubusercontent.com caches for minutes,
+      # too long for a sweep's two pushes). On a pull request, against the twin's branch of the same
+      # name when there is one (a change to the engine lands as two pull requests, one in each corpus, on one branch
+      # name), else its main; a difference fails the job. On a push it only warns: one of a sweep's two pull requests
+      # always merges first, and the twin's main catches up when the other does.
+      - name: The shared engine matches the twin corpus's
+        working-directory: .
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          EVENT: ${{ github.event_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          owner="${GITHUB_REPOSITORY%/*}"
+          case "$GITHUB_REPOSITORY" in
+            */test-lecture-theme-sphinx) twin="$owner/test-lecture-theme-mystmd" ;;
+            */test-lecture-theme-mystmd) twin="$owner/test-lecture-theme-sphinx" ;;
+            *) echo "::warning::$GITHUB_REPOSITORY is not one of the two corpora, so the engine is not compared"; exit 0 ;;
+          esac
+          raw() { gh api -H "Accept: application/vnd.github.raw" "repos/$twin/contents/$2?ref=$1"; }
+          ref=main
+          if [ -n "$HEAD_REF" ] && raw "$HEAD_REF" .github/workflows/harness.yml >/dev/null 2>&1; then ref="$HEAD_REF"; fi
+          strip='del(.name, .packages."".name)'   # the package files differ in their names alone
+          differ=()
+          for f in .github/workflows/harness.yml tests/harness/run.mjs tests/harness/selftest/run.mjs tests/harness/lib/*.mjs; do
+            raw "$ref" "$f" > "$RUNNER_TEMP/twin" 2>/dev/null || { differ+=("$f (not in the twin)"); continue; }
+            cmp -s "$f" "$RUNNER_TEMP/twin" || differ+=("$f")
+          done
+          for f in tests/harness/package.json tests/harness/package-lock.json; do
+            raw "$ref" "$f" > "$RUNNER_TEMP/twin" 2>/dev/null || { differ+=("$f (not in the twin)"); continue; }
+            cmp -s <(jq -S "$strip" "$f") <(jq -S "$strip" "$RUNNER_TEMP/twin") || differ+=("$f")
+          done
+          if [ ${#differ[@]} -eq 0 ]; then echo "The shared engine matches $twin@$ref."; exit 0; fi
+          msg="The shared engine differs from $twin@$ref in: ${differ[*]}. Change both corpora, on one branch name."
+          if [ "$EVENT" = pull_request ]; then echo "::error::$msg"; exit 1; fi
+          echo "::warning::$msg"
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: tests/harness/package-lock.json
+
+      # @playwright/test is pinned by package-lock.json; `playwright install` fetches the Chromium build that version names
+      - name: Install the harness and its browser
+        run: |
+          npm ci --no-fund --no-audit
+          npx playwright install --with-deps chromium
+
+      - name: Download the built site
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.site-artifact }}
+          path: ${{ runner.temp }}/site
+
+      - name: Self-test (the fixtures in tests/harness/selftest/)
+        run: npm run selftest
+
+      - name: Rendered checks
+        env:
+          HARNESS_BASE_PATH: ${{ inputs.base-path }}
+          # the pull request's head, not the merge commit GITHUB_SHA names on a pull request
+          HARNESS_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node run.mjs --dir "$RUNNER_TEMP/site" --base-path "$HARNESS_BASE_PATH" --out "$GITHUB_WORKSPACE/_harness"
+
+      - name: Upload the rows (_harness/)
+        if: ${{ !cancelled() && hashFiles('_harness/rendered.csv') != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: harness
+          path: _harness/
+          if-no-files-found: error
+          retention-days: 30

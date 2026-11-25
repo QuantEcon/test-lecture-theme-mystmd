@@ -2,6 +2,12 @@
 # build of lecture-python-programming does, and deploys: GitHub Pages on every
 # push to main (the comparison harness reads the live site), a Netlify preview
 # on pull requests once the site's secrets are set.
+#
+# Three jobs: `build` builds the site and uploads it; `rendered` runs the
+# harness's rendered checks on it (harness.yml); `deploy` uploads the Pages
+# artefact, with their rows under /_harness/ when that job succeeded, and on a
+# push to main publishes it. It waits for the checks but not on them: it runs
+# whenever the build succeeded.
 name: Build and Deploy
 on:
   pull_request:
@@ -46,8 +52,6 @@ jobs:
     permissions:
       contents: read
       packages: read   # an internal package: the runner pulls it with this job's token
-      pages: write
-      id-token: write
       pull-requests: write
     defaults:
       run:
@@ -182,14 +186,15 @@ jobs:
           fi
           echo "executed with Python $py; git history on all $pages pages"
 
-      - uses: actions/upload-pages-artifact@v5
+      # The built site, for the rendered checks and the deploy, which are jobs of
+      # their own so that the checks' rows can join the site before it is published.
+      - name: Upload the built site
+        uses: actions/upload-artifact@v7
         with:
+          name: site
           path: lectures/_build/html
-
-      - name: Deploy to GitHub Pages
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        id: deployment
-        uses: actions/deploy-pages@v5
+          if-no-files-found: error
+          retention-days: 7
 
       # Netlify secrets are per-repository and neither is set here yet. The
       # `secrets` context cannot be read from a step-level `if`, so both are
@@ -208,3 +213,50 @@ jobs:
             --alias "pr-${{ github.event.pull_request.number }}" --json | tee netlify.json
           # The image has no jq.
           echo "preview: $(python -c 'import json; print(json.load(open("netlify.json"))["deploy_url"])')" >> "$GITHUB_STEP_SUMMARY"
+
+  # The rendered checks (QuantEcon/test-lecture-theme-mystmd#2; harness.yml), on
+  # the site the build job built, served at the base it was built with: the
+  # BASE_URL of the build step, the repository's path on a push and none
+  # otherwise.
+  rendered:
+    needs: build
+    uses: ./.github/workflows/harness.yml
+    with:
+      site-artifact: site
+      base-path: ${{ github.event_name == 'push' && format('/{0}/', github.event.repository.name) || '/' }}
+
+  # The Pages artefact, with the rendered checks' rows at /_harness/ when that job
+  # succeeded and without them when it did not, so a failed check job never holds
+  # the site back; on every event, as before, and deployed on a push to main only.
+  # `!cancelled()` rather than `always()`, so a run cancelled while its checks ran
+  # publishes nothing.
+  deploy:
+    needs: [build, rendered]
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    steps:
+      - name: Download the built site
+        uses: actions/download-artifact@v8
+        with:
+          name: site
+          path: site
+
+      - name: Add the rendered checks' rows under /_harness/
+        if: needs.rendered.result == 'success'
+        uses: actions/download-artifact@v8
+        with:
+          name: harness
+          path: site/_harness
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        id: deployment
+        uses: actions/deploy-pages@v5

@@ -1,0 +1,54 @@
+# The self-test's locator table: the format of ../locators.yml, with seven of its entries, each with this site's real
+# locator, so the real behaviour in ../theme.mjs runs on the fixtures (`download-pdf` is null on this site, so the
+# self-test sees a feature with no counterpart), except `font-size`, given a locator its behaviour cannot use. The fixtures in good/ and bad/ are pages in this theme's markup.
+source:
+  repository: QuantEcon/project-theme-parity
+  path: bin/site-features.yml
+  commit: 530b6a80afa534d6935b8ee6d9243dc7df7e7ebd
+  side: mystmd
+features:
+  - id: header-title
+    name: "The book's title in the page header"
+    page: code_cells
+    viewport: desktop
+    locator: '[aria-label="Book title"] a'
+  - id: dark-mode
+    name: "Dark mode, and whether the reader's choice persists"
+    page: typography
+    viewport: desktop
+    locator:
+      toggle: 'button[aria-label="Change contrast"]'
+      dark: "html.dark"
+    behaviour: "toggle; open another page; reload; then emulate a change of `prefers-color-scheme`"
+  - id: dark-palette
+    name: "The dark palette"
+    page: typography
+    viewport: desktop
+    locator: "html.dark"
+    behaviour: "in dark mode, record the page, text and link colours (#15's metrics)"
+  - id: stderr-fold
+    name: "Folded stderr output"
+    page: code_cells
+    viewport: desktop
+    locator: "details.qe-stderr > summary"
+    behaviour: "the stderr text is hidden on load; the toggle shows it"
+  - id: download-pdf
+    name: "A PDF of the page"
+    page: code_cells
+    viewport: desktop
+    locator: null
+    behaviour: "activate the control; a print dialog opens"
+  - id: long-input
+    name: "Collapsed long inputs (`collapse-N`)"
+    page: long_cells
+    viewport: desktop
+    locator: ".qe-collapse--input .qe-collapse__bar"
+    behaviour: "the input's height is capped; the bar expands it to full height and collapses it again"
+  - id: font-size
+    name: "Text size controls"
+    page: typography
+    viewport: wide
+    # one unnamed part, where the behaviour presses the part named `increase`: the behaviour throws (`error`), at
+    # the `wide` viewport
+    locator: "article main p"
+    behaviour: "increase once: the text grows; the size holds on another page and after a reload"
