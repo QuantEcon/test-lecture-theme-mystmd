@@ -2,7 +2,7 @@
 
 *The QuantEcon theme-parity corpus built on the mystmd stack: the same content as [`test-lecture-theme-sphinx`](https://github.com/QuantEcon/test-lecture-theme-sphinx), built with the QuantEcon mystmd fork and `quantecon-theme.mystmd`, so the two renderings can be compared feature by feature.*
 
-Last updated: 2026-11-24
+Last updated: 2026-11-25
 
 > **This is a test repository.** Nothing here is a lecture. Do not link to it from a lecture site.
 
@@ -46,7 +46,7 @@ The code cells execute in the `quantecon` conda environment of the image CI buil
 
 ## The rendered checks
 
-`tests/harness/` is a Playwright project that checks this corpus's own build for the parity harness's rendered layer (QuantEcon/project-theme-parity#15, D9; QuantEcon/test-lecture-theme-mystmd#2): every site feature in its locator table, a copy of this theme's side of the harness's `bin/site-features.yml`, in light and dark, and every page at three viewports for error markers, console errors and sideways scrolling. CI runs it after the build (the `rendered` job of `ci.yml`, on every event, the site served at the base it was built with) and uploads the results as the run's `harness` artefact; the deploy puts them on the site at `/_harness/rendered.csv` and `/_harness/provenance.json` when the checks succeeded, and deploys without them when they did not. `tests/harness/README.md` says how to run it and what each check does.
+`tests/harness/` is a Playwright project that checks this corpus's own build for the parity harness's rendered layer (QuantEcon/project-theme-parity#15, D9; QuantEcon/test-lecture-theme-mystmd#2): every site feature in its locator table, a copy of this theme's side of the harness's `bin/site-features.yml`, in light and dark, and every page at three viewports for error markers, console errors and sideways scrolling. CI runs it after the build (the `rendered` job of `ci.yml`, on every event, the site served at the base it was built with) and uploads the results as the run's `harness` artefact; the deploy puts them on the site at `/_harness/rendered.csv` and `/_harness/provenance.json` when the checks succeeded, and deploys without them when they did not (a run cancelled meanwhile deploys nothing). `tests/harness/README.md` says how to run it and what each check does.
 
 `rendered.csv` has the same columns and vocabulary in both corpora, so the harness can join their rows on `page, family, check, viewport, scheme`:
 

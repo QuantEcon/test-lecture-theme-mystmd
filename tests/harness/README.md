@@ -2,7 +2,7 @@
 
 *Playwright, run against this corpus's own build, checking the site features of the theme-parity harness (QuantEcon/project-theme-parity#15, D9) and every page for error markers, console errors and sideways scrolling; it writes `rendered.csv` and `provenance.json`, which CI publishes at `/_harness/`.*
 
-Last updated: 2026-11-24
+Last updated: 2026-11-25
 
 This is layer 3 of the parity harness, the mystmd side of QuantEcon/test-lecture-theme-mystmd#2. Its twin in QuantEcon/test-lecture-theme-sphinx checks the Sphinx site with the same engine and writes the same CSV, and QuantEcon/project-theme-parity folds the two files into a pass. The parity repository is private, so the checks live here, where this repository's CI can run them on the build it just made. They sit outside `lectures/`: `bin/sync-from-sphinx` writes only `lectures/`, and `sync-check` diffs only that, so the sync never touches them and they need no exclusion.
 
@@ -26,7 +26,7 @@ The exit status: 0 when every check ran, whatever it found; 1 when a check could
 
 **The colour scheme.** The theme takes its scheme from `@myst-theme/site`: on a static build it reads `localStorage` `myst:theme` first and, without one, follows `prefers-color-scheme` (`useTheme`, and the `BlockingThemeLoader` before hydration). Each context emulates the preference and leaves the key unset, as for a reader who has not chosen, and before any check runs, the harness confirms the scheme took effect (`html.dark` in dark, not in light); a page where it did not gives `error` rows. mystmd highlights code after hydration, so a page is read a second after network idle, once the document stops changing.
 
-A check result is data: a failed feature check, a marker, a console message or an overflow is a row, not a failed job. So is a control a behaviour has to operate and cannot, because it is not shown or will not take the click: that is `fail`, with the control named, where a behaviour that throws for any other reason is `error`. Links are fetched from the browser's context, each URL once a run; a link that gets no answer (no connection, a 429 rate limit or a 5xx, after two more tries) leaves its check `skip`, for a person, rather than `fail`.
+A check result is data: a failed feature check, a marker, a console message or an overflow is a row, not a failed job. So is a control a behaviour has to operate and cannot, because it is not shown or will not take the click: that is `fail`, with the control named, where a behaviour that throws for any other reason is `error`. Links are fetched from the browser's context, each URL once a run. A link that answers with a failure (a 404, say), or a target that names the wrong file, makes its check `fail`; only when nothing failed does a link that gets no answer (no connection, a 429 rate limit or a 5xx, after two more tries) leave the check `skip`, for a person. Each behaviour has one time budget, 100 s inside its 120 s limit, and its retries stop before the budget runs out, so a slow or rate-limiting host gives `skip`, not `error`. The checks that read the clipboard take turns, since the browser has one clipboard, and each puts a marker on it before pressing, so a button that copies nothing cannot pass on text another check left there.
 
 ## rendered.csv
 
@@ -63,7 +63,7 @@ The repository and commit (`commit` is the pull request's head on a pull request
 
 ## The self-test
 
-`selftest/good/` and `selftest/bad/` are small static sites in this theme's markup, checked with `selftest/locators.yml` through the same engine and `theme.mjs`, their rows compared with `selftest/expected-*.csv`. Between them every check type passes and fails and every result appears: a working dark-mode toggle and a broken one, a stderr fold that works and one that does not, mystmd's red KaTeX message, a console error, a page wider than every viewport, a null locator, a locator that matches nothing, a check that cannot decide and a missing page. CI runs it before the real run; a mismatch fails the job.
+`selftest/good/` and `selftest/bad/` are small static sites in this theme's markup, checked with `selftest/locators.yml` through the same engine and `theme.mjs`, their rows compared with `selftest/expected-*.csv`. Between them every check type passes and fails and every result appears: a working dark-mode toggle and a broken one, a stderr fold that works and one that does not, mystmd's red KaTeX message and its "Unknown Directive" box title, a console error and a hydration warning, a page wider than every viewport, a null locator, a locator that matches nothing, a check that cannot decide, a behaviour that throws (given a locator without the part it presses), a feature at the `wide` viewport, a missing page, and a page whose dark scheme does not take effect. Then `run.mjs` itself runs on the good site: at the base the site was built for it checks it, and at another its build-base check stops it with exit 2. CI runs the self-test before the real run; a mismatch fails the job.
 
 ## Files
 
@@ -71,7 +71,7 @@ The repository and commit (`commit` is the pull request's head on a pull request
 - `lib/` — the engine, the same in both corpora: `engine.mjs` (the run), `behave.mjs` (the behaviours both themes share), `markers.mjs`, `util.mjs`, `table.mjs` (reads and checks the table), `server.mjs` (a static server under a base path, after quantecon-theme.mystmd's `static-server.mjs`), `csv.mjs`
 - `locators.yml`, `selftest/`, `package.json` and `package-lock.json` (`@playwright/test` and `yaml`, pinned)
 
-`.github/workflows/harness.yml` runs it after the build job of `ci.yml`, on every event, uploading `_harness/` as the run's `harness` artefact. The deploy job then uploads the Pages artefact with `_harness/` in it when the checks succeeded and without it when they did not, and on a push to `main` publishes it.
+`.github/workflows/harness.yml` runs it after the build job of `ci.yml`, on every event, uploading `_harness/` as the run's `harness` artefact. The deploy job then uploads the Pages artefact with `_harness/` in it when the checks succeeded and without it when they did not, and on a push to `main` publishes it. A run cancelled while the checks ran uploads and publishes nothing.
 
 ## Not in this run
 

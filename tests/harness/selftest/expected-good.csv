@@ -21,6 +21,10 @@ long_cells,long-input,present,desktop,light,pass,1 (1 visible)
 long_cells,long-input,behaviour,desktop,light,pass,after a second press
 long_cells,long-input,present,desktop,dark,pass,1 (1 visible)
 long_cells,long-input,behaviour,desktop,dark,pass,after a second press
+typography,font-size,present,wide,light,pass,visible)
+typography,font-size,behaviour,wide,light,error,"the behaviour threw: the locator has no part ""increase"""
+typography,font-size,present,wide,dark,pass,visible)
+typography,font-size,behaviour,wide,dark,error,"the behaviour threw: the locator has no part ""increase"""
 intro,page,error-marker,desktop,light,pass,none of: mjx-merror
 intro,page,console,desktop,light,pass,no console error
 intro,page,overflow,desktop,light,pass,<= clientWidth

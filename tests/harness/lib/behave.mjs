@@ -97,10 +97,14 @@ export async function fetchAll(c, urls) {
   return out;
 }
 
-/** pass when every link answered 200, skip when one got no answer (a person checks it), else fail. */
-export function verdictOf(words, results, ok = results.every((r) => r.status === 200)) {
+/**
+ * fail when anything definitely failed (a link that answered other than `good`, or `named` false: a wrong target);
+ * else skip when a link got no answer (no connection, a 429 or a 5xx: a person checks it); else pass.
+ */
+export function verdictOf(words, results, { good = (r) => r.status === 200, named = true } = {}) {
+  if (!named || results.some((r) => answered(r) && !good(r))) return fail(words);
   if (results.some((r) => !answered(r))) return skip(`${words}; a link got no answer, so a person checks it`);
-  return ok ? pass(words) : fail(words);
+  return pass(words);
 }
 
 const pageCache = new Map();
@@ -155,6 +159,28 @@ export async function inView(page, selectorOrHandle) {
 /** The clipboard's text, read through the page (the context grants clipboard-read). */
 export async function clipboard(page) {
   return page.evaluate(() => navigator.clipboard.readText()).catch((e) => `(clipboard unreadable: ${e.message})`);
+}
+
+// The clipboard belongs to the browser, which the checks running side by side share: one check at a time uses it.
+let clipboardTurn = Promise.resolve();
+
+/**
+ * Put a unique marker on the clipboard, `press` the control, and read the clipboard back, holding the clipboard for
+ * the whole time. Resolves to { text, untouched }: `untouched` when the clipboard still holds the marker, so the
+ * control copied nothing.
+ */
+export function copyWith(page, press) {
+  const turn = clipboardTurn.then(async () => {
+    const marker = `harness-marker-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    await page.bringToFront().catch(() => {});
+    await page.evaluate((m) => navigator.clipboard.writeText(m), marker).catch(() => {});
+    await press();
+    await sleep(600);
+    const text = await clipboard(page);
+    return { text, untouched: text === marker };
+  });
+  clipboardTurn = turn.catch(() => {});
+  return turn;
 }
 
 /**
@@ -225,32 +251,32 @@ export async function launchTargets(c, targets) {
   if (!targets.length) return fail("the control lists no target");
   const nb = `${c.feature.page}.ipynb`;
   const words = [], results = [];
-  let ok = true;
+  let named = true;
   for (const o of targets) {
     const notebook = notebookOf(o.url);
     const r = await c.fetch(notebook); // a notebook two targets name is fetched once (fetchUrl keeps each result)
     const names = notebook.split(/[?#]/)[0].endsWith(`/${nb}`);
-    ok &&= names && r.status === 200;
+    named &&= names;
     results.push(r);
     words.push(`${o.label}: ${names ? `names ${nb}` : `does not name ${nb}`}, ${said(notebook, r)}`);
   }
-  return verdictOf(words.join("; "), results, ok);
+  return verdictOf(words.join("; "), results, { named });
 }
 
 /** Fetch each download link: does it name this page's notebook, and answer 200? */
 export async function downloadLinks(c, hrefs) {
   if (!hrefs.length) return fail("no link to fetch");
   const words = [], results = [];
-  let ok = true;
+  let named = true;
   for (const h of hrefs) {
     const u = new URL(h, c.page.url()).href;
     const r = await c.fetch(u);
     const names = u.split(/[?#]/)[0].endsWith(`/${c.feature.page}.ipynb`);
-    ok &&= names && r.status === 200;
+    named &&= names;
     results.push(r);
     words.push(`"${h}" resolves to ${said(u, r)}${names ? "" : ", not this page's notebook"}`);
   }
-  return verdictOf(words.join("; "), results, ok);
+  return verdictOf(words.join("; "), results, { named });
 }
 
 async function linkTargets(c, hrefs) {
@@ -434,7 +460,7 @@ export function commonBehaviours(p) {
       }
       const used = results[results.length - 1];
       const detail = hrefs.length > 1 ? `the icon link a browser uses, the last of ${hrefs.length}: ${words[words.length - 1]}; also ${words.slice(0, -1).join("; ")}` : words.join("; ");
-      return verdictOf(detail, [used], used.status === 200 && used.under);
+      return verdictOf(detail, [used], { named: used.under });
     },
 
     async "static-assets"(c) {

@@ -176,7 +176,7 @@ const behaviours = {
     const res = await B.fetchAll(c, found.filter((f) => f.href).map((f) => f.href));
     const words = `${found.map((f) => `${f.name}: ${f.href ? res.find((r) => r.url === f.href).said : "no link"}`).join("; ")} (each link is in the card its name opens)`;
     if (unlinked.length) return fail(words);
-    return B.verdictOf(words, res, res.every((r) => r.ok));
+    return B.verdictOf(words, res, { good: (r) => r.ok });
   },
 
   async "notebook-header"(c) {
@@ -200,12 +200,11 @@ const behaviours = {
     await btn.evaluate((b) => b.closest(".myst-code")?.scrollIntoView({ block: "center" }));
     await btn.locator("xpath=ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' myst-code ')][1]").hover().catch(() => {});
     await sleep(300);
-    await press(btn, "the copy button");
-    await sleep(600);
-    const clip = await B.clipboard(page);
+    const { text: clip, untouched } = await B.copyWith(page, () => press(btn, "the copy button"));
     const norm = (s) => (s ?? "").split("\n").map((l) => l.replace(/\s+$/, "")).join("\n").trim();
-    const ok = want != null && norm(clip) === norm(want);
-    return { result: ok ? "pass" : "fail", detail: `pressed on the first code block: the clipboard holds ${norm(clip).length} characters ("${oneLine(clip, 60)}"), ${ok ? "its source" : `not its source (${norm(want).length} characters, "${oneLine(want, 60)}")`}` };
+    const ok = want != null && !untouched && norm(clip) === norm(want);
+    return { result: ok ? "pass" : "fail", detail: untouched ? "pressed on the first code block: the clipboard still holds the harness's marker, so the button copied nothing"
+      : `pressed on the first code block: the clipboard holds ${norm(clip).length} characters ("${oneLine(clip, 60)}"), ${ok ? "its source" : `not its source (${norm(want).length} characters, "${oneLine(want, 60)}")`}` };
   },
 
   async "long-input"(c) {

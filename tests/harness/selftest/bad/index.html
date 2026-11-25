@@ -1,9 +1,9 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>Intro — self-test</title>
-<script>/* @myst-theme/site's BlockingThemeLoader: the saved choice, else the preference */
-const saved = localStorage.getItem("myst:theme");
-const pref = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
-document.documentElement.classList.add(saved ?? pref);</script>
+<script>/* this page ignores the theme's scheme (the saved choice, else the preference): it is always light, so in dark
+   the scheme does not take effect */
+document.documentElement.classList.add("light");
+console.warn("Warning: Text content did not match. Server: \"a\" Client: \"b\"");</script>
 <style>body{margin:0;font:16px sans-serif} html.dark body{background:#1c1917;color:#ddd} article main{max-width:800px;margin:0 auto}
 article main p{font-size:18px} .qe-collapse--input .qe-collapse__body{max-height:6em;overflow:hidden}
 .qe-collapse--input[data-expanded="true"] .qe-collapse__body{max-height:none} pre{margin:0}</style></head>

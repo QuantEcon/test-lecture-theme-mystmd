@@ -99,25 +99,39 @@ export const answered = (r) => r.status > 0 && r.status !== 429 && r.status < 50
  * that never answers. Resolves to { status, url, error, body? }; status 0 when no answer came. The result, answered
  * or not, is kept for the rest of the run, so each URL is asked for once.
  */
-export async function fetchUrl(page, url, { body = false, method = "GET" } = {}) {
+export async function fetchUrl(page, url, { body = false, method = "GET", deadline = Infinity } = {}) {
   const key = `${method} ${url}${body ? " +body" : ""}`;
-  if (!answers.has(key)) answers.set(key, fetchOnce(page, url, body, method));
-  return answers.get(key);
+  if (answers.has(key)) {
+    const kept = await answers.get(key);
+    // a fetch another check's budget cut short is tried again by a check that still has time
+    if (!kept.cut || deadline - Date.now() < 2000) return kept;
+  }
+  const p = fetchOnce(page, url, body, method, deadline);
+  answers.set(key, p);
+  return p;
 }
 
-async function fetchOnce(page, url, body, method) {
-  let out;
+// `deadline` is the asking check's time budget (engine.mjs gives each behaviour one): no try starts, and no retry
+// waits, past it, so a slow or rate-limited host leaves the check `skip` rather than overrunning its time limit
+async function fetchOnce(page, url, body, method, deadline) {
+  const cut = (o) => ({ ...o, cut: true, error: o.error ?? `no time left in the check's budget to try again (answered ${o.status})` });
+  let out = { status: 0, url, error: "no time left in the check's budget", cut: true };
   for (let attempt = 1; attempt <= 3; attempt++) {
+    const left = deadline - Date.now();
+    if (left < 2000) return attempt === 1 ? out : cut(out);
+    let wait;
     try {
-      const r = await page.context().request.fetch(url, { method, maxRedirects: 10, failOnStatusCode: false, timeout: 15_000 });
+      const r = await page.context().request.fetch(url, { method, maxRedirects: 10, failOnStatusCode: false, timeout: Math.min(15_000, left) });
       out = { status: r.status(), url: r.url(), body: body ? await r.text().catch(() => "") : undefined, retried: attempt > 1 };
       if (answered(out) || attempt === 3) return out;
-      await sleep(Math.min(10, Number(r.headers()["retry-after"]) || 3 * attempt) * 1000);
+      wait = Math.min(10, Number(r.headers()["retry-after"]) || 3 * attempt) * 1000;
     } catch (e) {
       out = { status: 0, url, error: oneLine(e.message, 160) };
       if (attempt === 3) return out;
-      await sleep(3000 * attempt);
+      wait = 3000 * attempt;
     }
+    if (Date.now() + wait + 2000 > deadline) return cut(out);
+    await sleep(wait);
   }
   return out;
 }

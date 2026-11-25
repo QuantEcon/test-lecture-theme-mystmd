@@ -84,12 +84,14 @@ async function featureTask(browser, run, f, scheme) {
         if (!hit) throw new Error(`the locator has no part "${name}"`);
         return hit[1];
       };
+      // the behaviour's time budget: its fetches stop retrying before it, well inside the 120 s limit below
+      const deadline = Date.now() + 100_000;
       const c = {
-        page, context: ctx, feature: f, scheme, viewport: f.viewport, site, theme, url, counts,
+        page, context: ctx, feature: f, scheme, viewport: f.viewport, site, theme, url, counts, deadline,
         load: w.snapshot(),
         selector: selectorOf,
         part: (name = "") => page.locator(selectorOf(name)),
-        fetch: (u, o) => fetchUrl(page, u, o),
+        fetch: (u, o) => fetchUrl(page, u, { ...o, deadline }),
         pageUrl: (stem) => site.url + theme.pagePath(stem),
         reload: async (target = page.url()) => { const n = await load(page, target); if (!n.ok) throw new Error(n.detail); await theme.settle(page); },
       };

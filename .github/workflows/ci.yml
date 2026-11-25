@@ -226,12 +226,13 @@ jobs:
       base-path: ${{ github.event_name == 'push' && format('/{0}/', github.event.repository.name) || '/' }}
 
   # The Pages artefact, with the rendered checks' rows at /_harness/ when that job
-  # succeeded and without them when it did not, so a failed or cancelled check job
-  # never holds the site back; on every event, as before, and deployed on a push
-  # to main only.
+  # succeeded and without them when it did not, so a failed check job never holds
+  # the site back; on every event, as before, and deployed on a push to main only.
+  # `!cancelled()` rather than `always()`, so a run cancelled while its checks ran
+  # publishes nothing.
   deploy:
     needs: [build, rendered]
-    if: always() && needs.build.result == 'success'
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

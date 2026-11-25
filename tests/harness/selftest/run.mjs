@@ -8,12 +8,18 @@
 // the real run, on the pages intro, typography, code_cells and long_cells, and its rows are compared with
 // expected-<site>.csv: every row must be there with the same result, and where an expected row has a detail, the
 // actual detail must contain it (an empty detail matches any). Between them the two sites give every check type a
-// passing and a failing row, and every result: a working toggle and a broken one, an error marker, a console error,
-// an overflowing page, a null locator (`none`), a locator that matches nothing (`absent`), a check that could not
-// decide (`skip`), and a page that is missing (`error`). Exit 1 on any mismatch, so the job fails before the real run.
+// passing and a failing row, and every result: a working toggle and a broken one, error markers (an element and the
+// "Unknown Directive" text), a console error and a hydration warning, an overflowing page, a null locator (`none`), a
+// locator that matches nothing (`absent`), a check that could not decide (`skip`), a behaviour that throws, a
+// feature at the `wide` viewport, and `error` rows for a page that is missing and for a page whose colour scheme does
+// not take effect. Then run.mjs itself is run on the good site: served at the base it was built for, it checks it;
+// at another base, its build-base check stops it with exit 2. Exit 1 on any mismatch, so the job fails before the
+// real run.
 //
 // This file is the same in QuantEcon/test-lecture-theme-sphinx and QuantEcon/test-lecture-theme-mystmd.
-import { readFile } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { keyOf, parseCsv, toCsv } from "../lib/csv.mjs";
@@ -51,8 +57,29 @@ async function check(name, table) {
   }
 }
 
+// run.mjs on the good site, one feature, no page-wide checks: the exit status and what it says on stderr
+async function baseCheck() {
+  const out = await mkdtemp(join(tmpdir(), "harness-selftest-"));
+  const env = { ...process.env };
+  delete env.GITHUB_STEP_SUMMARY; // this run's summary is not the job's
+  const run = (base) => spawnSync(process.execPath, [join(HERE, "..", "run.mjs"), "--dir", join(HERE, "good"), "--base-path", base,
+    "--table", join(HERE, "locators.yml"), "--only", "header-title", "--no-pages", "--quiet", "--out", out], { encoding: "utf8", env });
+  const problems = [];
+  try {
+    const right = run(theme.basePath), wrong = run("/not-this-base/");
+    if (right.status !== 0) problems.push(`at ${theme.basePath}: expected exit 0, got ${right.status} (${right.stderr.trim().split("\n").pop()})`);
+    if (wrong.status !== 2 || !/was not built for the base/.test(wrong.stderr)) problems.push(`at /not-this-base/: expected exit 2 from the build-base check, got ${wrong.status} (${wrong.stderr.trim().split("\n").pop()})`);
+  } finally {
+    await rm(out, { recursive: true, force: true });
+  }
+  console.log(`${problems.length ? "FAIL" : "ok  "} run.mjs's build-base check: the good site runs at ${theme.basePath} and stops at another base${problems.length ? `, ${problems.length} mismatch(es)` : ""}`);
+  for (const p of problems) console.log(`       ${p}`);
+  return problems.length;
+}
+
 const table = await readTable(join(HERE, "locators.yml"), theme.side);
 let bad = 0;
 for (const name of ["good", "bad"]) bad += await check(name, table);
+if (!write) bad += await baseCheck();
 if (!write) console.log(bad ? "the self-test failed: the harness does not read its fixtures as expected" : "the self-test passed");
 process.exit(bad ? 1 : 0);

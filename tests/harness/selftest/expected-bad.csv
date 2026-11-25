@@ -21,24 +21,28 @@ long_cells,long-input,present,desktop,light,error,answered 404
 long_cells,long-input,behaviour,desktop,light,error,answered 404
 long_cells,long-input,present,desktop,dark,error,answered 404
 long_cells,long-input,behaviour,desktop,dark,error,answered 404
+typography,font-size,present,wide,light,pass,visible)
+typography,font-size,behaviour,wide,light,error,"the behaviour threw: the locator has no part ""increase"""
+typography,font-size,present,wide,dark,pass,visible)
+typography,font-size,behaviour,wide,dark,error,"the behaviour threw: the locator has no part ""increase"""
 intro,page,error-marker,desktop,light,pass,none of: mjx-merror
-intro,page,console,desktop,light,pass,no console error
+intro,page,console,desktop,light,fail,warning: Warning: Text content did not match
 intro,page,overflow,desktop,light,fail,> clientWidth
-intro,page,error-marker,desktop,dark,pass,none of: mjx-merror
-intro,page,console,desktop,dark,pass,no console error
-intro,page,overflow,desktop,dark,fail,> clientWidth
+intro,page,error-marker,desktop,dark,error,"the dark scheme did not take effect: html class ""light"""
+intro,page,console,desktop,dark,error,"the dark scheme did not take effect: html class ""light"""
+intro,page,overflow,desktop,dark,error,"the dark scheme did not take effect: html class ""light"""
 intro,page,error-marker,tablet,light,pass,none of: mjx-merror
-intro,page,console,tablet,light,pass,no console error
+intro,page,console,tablet,light,fail,warning: Warning: Text content did not match
 intro,page,overflow,tablet,light,fail,> clientWidth
-intro,page,error-marker,tablet,dark,pass,none of: mjx-merror
-intro,page,console,tablet,dark,pass,no console error
-intro,page,overflow,tablet,dark,fail,> clientWidth
+intro,page,error-marker,tablet,dark,error,"the dark scheme did not take effect: html class ""light"""
+intro,page,console,tablet,dark,error,"the dark scheme did not take effect: html class ""light"""
+intro,page,overflow,tablet,dark,error,"the dark scheme did not take effect: html class ""light"""
 intro,page,error-marker,phone,light,pass,none of: mjx-merror
-intro,page,console,phone,light,pass,no console error
+intro,page,console,phone,light,fail,warning: Warning: Text content did not match
 intro,page,overflow,phone,light,fail,> clientWidth
-intro,page,error-marker,phone,dark,pass,none of: mjx-merror
-intro,page,console,phone,dark,pass,no console error
-intro,page,overflow,phone,dark,fail,> clientWidth
+intro,page,error-marker,phone,dark,error,"the dark scheme did not take effect: html class ""light"""
+intro,page,console,phone,dark,error,"the dark scheme did not take effect: html class ""light"""
+intro,page,overflow,phone,dark,error,"the dark scheme did not take effect: html class ""light"""
 typography,page,error-marker,desktop,light,fail,maths error text (mystmd's red KaTeX message)
 typography,page,console,desktop,light,pass,no console error
 typography,page,overflow,desktop,light,pass,<= clientWidth
