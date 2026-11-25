@@ -16,13 +16,13 @@
 #   behaviour  where the feature behaves, the behaviour to exercise (theme.mjs implements it, keyed by the id)
 #   corrected  only where a locator had moved on this site's build: {from: the locator as copied, why: what moved}
 #
-# Every locator was checked against this site's build before it was copied here. One that had moved is corrected
-# here, with its `corrected:` note, and carried in provenance.json; the correction belongs in bin/site-features.yml
-# too, which this repository cannot change, so the PR that makes it proposes it there.
+# Every locator was checked against this site's build before it was copied here. One that has moved is corrected
+# here, with its `corrected:` note, and carried in provenance.json, until bin/site-features.yml carries it too; this
+# repository cannot change that file, so the PR that makes a correction proposes it there. None is open on this site.
 source:
   repository: QuantEcon/project-theme-parity
   path: bin/site-features.yml
-  commit: 530b6a80afa534d6935b8ee6d9243dc7df7e7ebd
+  commit: f5a7e81587995dae3c1ad7e0f9085044b0b584bd
   side: mystmd
 features:
   - id: launch
