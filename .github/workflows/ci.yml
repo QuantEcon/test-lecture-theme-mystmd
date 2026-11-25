@@ -3,11 +3,11 @@
 # push to main (the comparison harness reads the live site), a Netlify preview
 # on pull requests once the site's secrets are set.
 #
-# Three jobs: `build` builds the site and uploads it; `rendered` runs the
+# Four jobs: `build` builds the site and uploads it; `rendered` runs the
 # harness's rendered checks on it (harness.yml); `deploy` uploads the Pages
-# artefact, with their rows under /_harness/ when that job succeeded, and on a
-# push to main publishes it. It waits for the checks but not on them: it runs
-# whenever the build succeeded.
+# artefact, with their rows under /_harness/ when that job succeeded; and on a
+# push to main `pages` publishes it. `deploy` waits for the checks but not on
+# them: it runs whenever the build succeeded, and `pages` whenever `deploy` did.
 name: Build and Deploy
 on:
   pull_request:
@@ -236,6 +236,13 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    # The Pages artefact is named for the run attempt, and `pages` reads the name
+    # from here. A re-run that repeats this job uploads another artefact, and
+    # deploy-pages, which looks an artefact up by name across the whole run,
+    # would otherwise find two and stop. A re-run of `pages` alone keeps this
+    # job's output from the attempt that made the artefact.
+    outputs:
+      pages-artifact: github-pages-${{ github.run_attempt }}
     steps:
       - name: Download the built site
         uses: actions/download-artifact@v8
@@ -253,13 +260,15 @@ jobs:
       - uses: actions/upload-pages-artifact@v5
         with:
           path: site
+          name: github-pages-${{ github.run_attempt }}
 
-  # deploy-pages runs in a job of its own, after the job that uploads the Pages artefact. In the same job as the upload
-  # it lost a race with the artefact listing on the first push after #17: run 45706993700 found "No artifacts named
-  # github-pages" a second after the upload, in two of its three attempts, and the third re-run met the second attempt's
-  # artefact as well. A job boundary lets the artefact settle first, as GitHub's own Pages workflows do. The
-  # `needs.deploy.result` test is explicit because `deploy` itself runs after a failed checks job, which would otherwise
-  # skip this one.
+  # deploy-pages runs in a job of its own, after the upload, as its README
+  # recommends. In the same job it lost a race with the artefact listing on the
+  # first push after #17: run 45706993700's attempts 1 and 3 found "No
+  # artifacts named github-pages" about a second after the upload, and attempt 2
+  # found two, attempt 1's and its own (the per-attempt name above answers
+  # that). The `needs.deploy.result` test is explicit because `deploy` also
+  # runs after a failed checks job, which would otherwise skip this one.
   pages:
     needs: deploy
     if: ${{ !cancelled() && needs.deploy.result == 'success' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
@@ -271,3 +280,5 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
+        with:
+          artifact_name: ${{ needs.deploy.outputs.pages-artifact }}
