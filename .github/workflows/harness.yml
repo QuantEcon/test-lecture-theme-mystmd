@@ -38,10 +38,15 @@ jobs:
 
       # The engine is shared by copy (everything but theme.mjs, locators.yml and the fixtures), so it is compared with
       # the twin corpus's, read through the API with this job's token (raw.githubusercontent.com caches for minutes,
-      # too long for a sweep's two pushes). On a pull request, against the twin's branch of the same
-      # name when there is one (a change to the engine lands as two pull requests, one in each corpus, on one branch
-      # name), else its main; a difference fails the job. On a push it only warns: one of a sweep's two pull requests
-      # always merges first, and the twin's main catches up when the other does.
+      # too long for a sweep's two pushes). Every file is read at one commit of the twin: on a pull request, the head
+      # of its branch of the same name when there is one (a change to the engine lands as two pull requests, one in
+      # each corpus, on one branch name), else the head of its main. The files compared are the union of the two
+      # corpora's. A difference fails the job on a pull request; on a push it only warns, since one of a sweep's two
+      # pull requests always merges first and the twin's main catches up when the other does. Only an answer of 404
+      # means "not there": any other failed read (a rate limit, a 5xx, the network) is tried once more and then
+      # reported as unread, which fails a pull request and warns on a push, like a difference. On a pull request this
+      # side is the merge with this repository's main, and the twin is read at its branch head, so after an engine
+      # change lands on both mains, update both branches of an open pair before trusting this step.
       - name: The shared engine matches the twin corpus's
         working-directory: .
         env:
@@ -55,23 +60,47 @@ jobs:
             */test-lecture-theme-mystmd) twin="$owner/test-lecture-theme-sphinx" ;;
             *) echo "::warning::$GITHUB_REPOSITORY is not one of the two corpora, so the engine is not compared"; exit 0 ;;
           esac
-          raw() { gh api -H "Accept: application/vnd.github.raw" "repos/$twin/contents/$2?ref=$1"; }
-          ref=main
-          if [ -n "$HEAD_REF" ] && raw "$HEAD_REF" .github/workflows/harness.yml >/dev/null 2>&1; then ref="$HEAD_REF"; fi
+          # A finding fails a pull request and only warns on a push.
+          report() { if [ "$EVENT" = pull_request ]; then echo "::error::$1"; exit 1; fi; echo "::warning::$1"; exit 0; }
+          # api <out> <gh api arguments>: 0 read, 4 not there (404), 1 unread after two tries.
+          api() {
+            local out="$1" try; shift
+            for try in 1 2; do
+              if gh api --method GET "$@" > "$out" 2> "$RUNNER_TEMP/err"; then return 0; fi
+              if grep -q 'HTTP 404' "$RUNNER_TEMP/err"; then return 4; fi
+              if [ "$try" = 1 ]; then sleep 5; fi
+            done
+            return 1
+          }
+          unread() { report "The shared engine could not be compared: reading $twin $1 failed twice ($(tr '\n' ' ' < "$RUNNER_TEMP/err" | cut -c1-200))."; }
+          ref=main; rc=0
+          if [ -n "$HEAD_REF" ]; then
+            api "$RUNNER_TEMP/sha" "repos/$twin/commits" -f sha="$HEAD_REF" -f per_page=1 --jq '.[0].sha' || rc=$?
+            case "$rc" in 0) ref="$HEAD_REF" ;; 4) ;; *) unread "branch $HEAD_REF" ;; esac
+          fi
+          if [ "$ref" = main ]; then
+            rc=0; api "$RUNNER_TEMP/sha" "repos/$twin/commits" -f sha=main -f per_page=1 --jq '.[0].sha' || rc=$?
+            [ "$rc" = 0 ] || unread "main"
+          fi
+          sha=$(cat "$RUNNER_TEMP/sha")
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || report "The shared engine could not be compared: $twin@$ref gave no commit."
+          rc=0; api "$RUNNER_TEMP/twin-lib" "repos/$twin/contents/tests/harness/lib" -f ref="$sha" --jq '.[].name' || rc=$?
+          [ "$rc" = 0 ] || unread "tests/harness/lib at $sha"
+          libs=$( { (cd tests/harness/lib && ls -1 -- *.mjs); grep '\.mjs$' "$RUNNER_TEMP/twin-lib" || true; } | sort -u)
           strip='del(.name, .packages."".name)'   # the package files differ in their names alone
           differ=()
-          for f in .github/workflows/harness.yml tests/harness/run.mjs tests/harness/selftest/run.mjs tests/harness/lib/*.mjs; do
-            raw "$ref" "$f" > "$RUNNER_TEMP/twin" 2>/dev/null || { differ+=("$f (not in the twin)"); continue; }
-            cmp -s "$f" "$RUNNER_TEMP/twin" || differ+=("$f")
+          for f in .github/workflows/harness.yml tests/harness/run.mjs tests/harness/selftest/run.mjs \
+                   $(printf 'tests/harness/lib/%s\n' $libs) tests/harness/package.json tests/harness/package-lock.json; do
+            rc=0; api "$RUNNER_TEMP/twin" -H "Accept: application/vnd.github.raw" "repos/$twin/contents/$f" -f ref="$sha" || rc=$?
+            case "$rc" in 0) ;; 4) differ+=("$f (not in the twin)"); continue ;; *) unread "$f at $sha" ;; esac
+            if [ ! -f "$f" ]; then differ+=("$f (only in the twin)"); continue; fi
+            case "$f" in
+              *package.json|*package-lock.json) cmp -s <(jq -S "$strip" "$f") <(jq -S "$strip" "$RUNNER_TEMP/twin") || differ+=("$f") ;;
+              *) cmp -s "$f" "$RUNNER_TEMP/twin" || differ+=("$f") ;;
+            esac
           done
-          for f in tests/harness/package.json tests/harness/package-lock.json; do
-            raw "$ref" "$f" > "$RUNNER_TEMP/twin" 2>/dev/null || { differ+=("$f (not in the twin)"); continue; }
-            cmp -s <(jq -S "$strip" "$f") <(jq -S "$strip" "$RUNNER_TEMP/twin") || differ+=("$f")
-          done
-          if [ ${#differ[@]} -eq 0 ]; then echo "The shared engine matches $twin@$ref."; exit 0; fi
-          msg="The shared engine differs from $twin@$ref in: ${differ[*]}. Change both corpora, on one branch name."
-          if [ "$EVENT" = pull_request ]; then echo "::error::$msg"; exit 1; fi
-          echo "::warning::$msg"
+          if [ ${#differ[@]} -eq 0 ]; then echo "The shared engine matches $twin@$ref ($sha)."; exit 0; fi
+          report "The shared engine differs from $twin@$ref ($sha) in: ${differ[*]}. Change both corpora, on one branch name."
 
       - uses: actions/setup-node@v7
         with:
