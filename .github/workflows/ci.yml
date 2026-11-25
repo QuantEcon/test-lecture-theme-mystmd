@@ -236,8 +236,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pages: write
-      id-token: write
     steps:
       - name: Download the built site
         uses: actions/download-artifact@v8
@@ -256,7 +254,20 @@ jobs:
         with:
           path: site
 
+  # deploy-pages runs in a job of its own, after the job that uploads the Pages artefact. In the same job as the upload
+  # it lost a race with the artefact listing on the first push after #17: run 45706993700 found "No artifacts named
+  # github-pages" a second after the upload, in two of its three attempts, and the third re-run met the second attempt's
+  # artefact as well. A job boundary lets the artefact settle first, as GitHub's own Pages workflows do. The
+  # `needs.deploy.result` test is explicit because `deploy` itself runs after a failed checks job, which would otherwise
+  # skip this one.
+  pages:
+    needs: deploy
+    if: ${{ !cancelled() && needs.deploy.result == 'success' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    steps:
       - name: Deploy to GitHub Pages
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         id: deployment
         uses: actions/deploy-pages@v5
