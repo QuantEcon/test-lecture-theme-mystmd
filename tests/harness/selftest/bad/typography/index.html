@@ -12,6 +12,8 @@ article main p{font-size:18px} .qe-collapse--input .qe-collapse__body{max-height
 <li><button aria-label="Change contrast">contrast</button></li></ul></div>
 <article class="article content"><main>
 <p>A paragraph of lecture text, long enough to measure, with <a href="../">a link</a>.</p><details class="myst-admonition"><summary><div class="myst-exercise-title">only - Unknown Directive</div></summary><div>the directive's body</div></details>
+<!-- an undefined macro in inline maths, $\foo$: KaTeX's parse error at build, shown as myst-theme's InlineError -->
+<p>An undefined macro: <span class="text-yellow-600" title="Undefined control sequence: \foo at position 1: \̲f̲o̲o̲"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon" width="1rem" height="1rem" class="inline mr-1"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"></path></svg>\foo</span> in a sentence.</p>
 <pre title="Unexpected character: '\' at position 74"><span class="text-red-500">Unexpected character: '\' at position 74</span></pre>
 </main></article>
 <script>/* a broken toggle: the click does nothing */

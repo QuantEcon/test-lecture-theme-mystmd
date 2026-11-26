@@ -1,4 +1,4 @@
-# The self-test's locator table: the format of ../locators.yml, with seven of its entries, each with this site's real
+# The self-test's locator table: the format of ../locators.yml, with nine of its entries, each with this site's real
 # locator, so the real behaviour in ../theme.mjs runs on the fixtures (`download-pdf` is null on this site, so the
 # self-test sees a feature with no counterpart), except `font-size`, given a locator its behaviour cannot use. The fixtures in good/ and bad/ are pages in this theme's markup.
 source:
@@ -32,6 +32,20 @@ features:
     viewport: desktop
     locator: "details.qe-stderr > summary"
     behaviour: "the stderr text is hidden on load; the toggle shows it"
+  - id: page-meta
+    name: "Canonical link, page title and social cards"
+    page: code_cells
+    viewport: desktop
+    locator:
+      canonical: 'link[rel="canonical"]'
+      og: 'meta[property^="og:"]'
+    behaviour: "the canonical URL and `og:url` equal the page's address"
+  - id: code-copy
+    name: "Copy buttons on code"
+    page: code_cells
+    viewport: desktop
+    locator: ".myst-code button.myst-code-copy-icon"
+    behaviour: "press it on a cell; the clipboard holds the cell's source"
   - id: download-pdf
     name: "A PDF of the page"
     page: code_cells

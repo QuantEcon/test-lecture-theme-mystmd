@@ -164,24 +164,38 @@ export async function clipboard(page) {
 // The clipboard belongs to the browser, which the checks running side by side share: one check at a time uses it.
 let clipboardTurn = Promise.resolve();
 
+export const UNPRIMED = "the clipboard could not be primed; a person checks it";
+
 /**
- * Put a unique marker on the clipboard, `press` the control, and read the clipboard back, holding the clipboard for
- * the whole time. Resolves to { text, untouched }: `untouched` when the clipboard still holds the marker, so the
- * control copied nothing.
+ * Put a unique marker on the clipboard and read it back, then `press` the control and read the clipboard again,
+ * holding the clipboard for the whole time. Resolves to { primed, text, untouched, why }. `primed` is false when the
+ * clipboard did not hold the marker before the press (the write failed, or the clipboard reads back something else):
+ * nothing is pressed, since whatever the clipboard holds afterwards proves nothing, and the caller's check is `skip`
+ * (unprimed() below; `why` says what happened). `untouched` when the clipboard still holds the marker after the
+ * press, so the control copied nothing.
  */
 export function copyWith(page, press) {
   const turn = clipboardTurn.then(async () => {
     const marker = `harness-marker-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     await page.bringToFront().catch(() => {});
-    await page.evaluate((m) => navigator.clipboard.writeText(m), marker).catch(() => {});
+    const refused = await page.evaluate((m) => navigator.clipboard.writeText(m).then(() => null), marker)
+      .catch((e) => oneLine(String(e?.message ?? e).split("\n")[0], 160));
+    const before = await clipboard(page);
+    if (before !== marker) {
+      return { primed: false, text: before, untouched: false,
+        why: refused ? `writing the harness's marker failed: ${refused}` : `the clipboard read back "${oneLine(before, 80)}", not the harness's marker` };
+    }
     await press();
     await sleep(600);
     const text = await clipboard(page);
-    return { text, untouched: text === marker };
+    return { primed: true, text, untouched: text === marker };
   });
   clipboardTurn = turn.catch(() => {});
   return turn;
 }
+
+/** The `skip` a copy check gives when copyWith could not prime the clipboard. */
+export const unprimed = (copied) => skip(`${UNPRIMED} (${copied.why})`);
 
 /**
  * The collapse bar: capped on load, the bar expands the block to its full height, and a second press caps it again.
