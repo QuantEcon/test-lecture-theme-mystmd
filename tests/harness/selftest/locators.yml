@@ -1,6 +1,7 @@
-# The self-test's locator table: the format of ../locators.yml, with nine of its entries, each with this site's real
-# locator, so the real behaviour in ../theme.mjs runs on the fixtures (`download-pdf` is null on this site, so the
-# self-test sees a feature with no counterpart), except `font-size`, given a locator its behaviour cannot use. The fixtures in good/ and bad/ are pages in this theme's markup.
+# The self-test's locator table: the format of ../locators.yml, with twelve of its entries, each with this site's real
+# locator (so the real behaviour in ../theme.mjs runs on the fixtures) except `font-size`, given a locator its behaviour
+# cannot use. Two are null on this site, so the self-test sees features with no counterpart: `outline-copy-link`, and
+# `notebook-header`, whose behaviour runs without one. The fixtures in good/ and bad/ are pages in this theme's markup.
 source:
   repository: QuantEcon/project-theme-parity
   path: bin/site-features.yml
@@ -46,12 +47,34 @@ features:
     viewport: desktop
     locator: ".myst-code button.myst-code-copy-icon"
     behaviour: "press it on a cell; the clipboard holds the cell's source"
+  - id: download-notebook
+    name: "Download the page's notebook"
+    page: code_cells
+    viewport: desktop
+    locator:
+      control: 'button[aria-label="Downloads"]'
+      items: '[role="menu"] [role="menuitem"]'
+    behaviour: "open the control where it is a menu, and fetch each link"
+  - id: notebook-header
+    name: "The notebook header"
+    page: code_cells
+    viewport: desktop
+    locator: null
+    behaviour: "download each stack's notebook for the page and compare its first cell"
   - id: download-pdf
     name: "A PDF of the page"
     page: code_cells
     viewport: desktop
+    locator:
+      control: 'button[aria-label="Downloads"]'
+      pdf: '[role="menu"] [role="menuitem"]:has-text("PDF")'
+    behaviour: "activate the control; Sphinx's opens a print dialog, mystmd's menu lists the PDF and its file answers 200"
+  - id: outline-copy-link
+    name: "Copy a section's link from the outline"
+    page: typography
+    viewport: wide
     locator: null
-    behaviour: "activate the control; a print dialog opens"
+    behaviour: "activate it; the clipboard holds the page URL with the section's fragment"
   - id: long-input
     name: "Collapsed long inputs (`collapse-N`)"
     page: long_cells
