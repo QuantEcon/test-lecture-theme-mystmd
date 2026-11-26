@@ -152,10 +152,11 @@ jobs:
 
       # The plain_latex_book template loads lmodern, which the image lacks:
       # Debian ships it as a package of its own, a recommendation of texlive
-      # that the image's --no-install-recommends leaves out. A TeX font never
-      # reaches a code cell, so, like Node above, it is outside what D14 holds
-      # constant. The image could carry it instead (QuantEcon/actions,
-      # containers/quantecon-build), and this step would then go.
+      # that the image's --no-install-recommends leaves out. apt writes under
+      # /usr and /etc only and leaves the conda env alone; the fonts may become
+      # visible to fontconfig, and so to matplotlib, but no cell picks a font
+      # family, so no output changes. QuantEcon/actions#353 puts lmodern in the
+      # image, and this step goes at the next digest bump of both corpora.
       - name: Install the Latin Modern fonts the PDF template loads
         run: |
           apt-get update -qq
@@ -167,19 +168,27 @@ jobs:
       # the HTML because the site build links an export only when its file
       # already exists. It executes the code cells, so the PDF carries their
       # outputs, and the HTML build then takes the same outputs from the
-      # execution cache (_build/execute) rather than running the cells again.
+      # execution cache (_build/execute) for the pages it holds.
       # LaTeX is the image's (xelatex through latexmk), with the one package
       # the step before adds; the template is fetched from api.mystmd.org. myst
       # exits 0 when LaTeX fails, so the file is checked here, and what myst
-      # and TeX reported is raised as annotations.
+      # and TeX reported is raised as warning annotations. The execution cache
+      # keeps only the pages that ran without an error, so the HTML build runs
+      # the others (code_cells, known_failures) again.
       - name: Build the book PDF (executing the code cells)
         working-directory: lectures
         run: |
           note() { local m=$2; m=${m//'%'/'%25'}; m=${m//$'\r'/'%0D'}; m=${m//$'\n'/'%0A'}; echo "::$1 title=$3::$m"; }
           log="$RUNNER_TEMP/myst-pdf.log"
           myst build --pdf --execute 2>&1 | tee "$log"
-          myst_errors=$(sed 's/\x1b\[[0-9;]*m//g' "$log" | grep -F '🛑' | sort -u | head -15 || true)
-          [ -z "$myst_errors" ] || note warning "$myst_errors" "myst errors in the PDF build"
+          # myst's errors: a file's are ⛔️ lines, makeglossaries's 🛑. Content the
+          # LaTeX renderer has no rule for is dropped from the PDF, so it is
+          # raised on its own; all of these are warnings, since the PDF is built.
+          myst_errors=$(sed 's/\x1b\[[0-9;]*m//g' "$log" | grep -E '⛔|🛑' | sort -u || true)
+          dropped=$(grep -F 'Unhandled LaTeX' <<< "$myst_errors" || true)
+          other=$(grep -vF 'Unhandled LaTeX' <<< "$myst_errors" || true)
+          [ -z "$dropped" ] || note warning "$dropped" "Content the PDF export drops ($(grep -c . <<< "$dropped") kinds)"
+          [ -z "$other" ] || note warning "$(head -20 <<< "$other")" "Other myst errors in the PDF build ($(grep -c . <<< "$other") in all)"
           # TeX's errors, from the log latexmk leaves beside the .tex (-file-line-error form)
           tex_errors=$(find _build/temp -name '*.log' -exec grep -hE '^!|^[^ :]+[.]tex:[0-9]+: ' {} + 2>/dev/null | sed -E 's/[.]tex:[0-9]+:/.tex:/' | sort | uniq -c | sort -rn || true)
           [ -z "$tex_errors" ] || note warning "$(head -15 <<< "$tex_errors")" "TeX errors in the PDF build ($(awk '{n+=$1} END {print n}' <<< "$tex_errors") in all)"
@@ -234,9 +243,10 @@ jobs:
 
       # The downloads in the site that is uploaded: the files themselves (the
       # build copies an export under build/, with a hashed name), the project's
-      # `downloads` as config.json lists them, and the links the pages carry,
-      # each of which must resolve to a file in this tree. Raised as
-      # annotations, so a run's check-runs record what the site holds.
+      # `downloads` as config.json lists them, and the pages' links to each
+      # declared PDF, which must be $BASE_URL/build/<file> on every page (a
+      # link without the base would 404 on Pages). Raised as annotations, so a
+      # run's check-runs record what the site holds.
       - name: Check the downloads reached the site
         working-directory: lectures/_build/html
         env:
@@ -252,26 +262,28 @@ jobs:
           import json
           for proj in json.load(open("config.json")).get("projects", []):
               for d in proj.get("downloads") or []:
-                  print(f'{d.get("title")}: {d.get("url")} (filename {d.get("filename")}, format {d.get("format")})')
+                  print("\t".join(str(d.get(k)) for k in ("title", "url", "filename", "format")))
           PY
           )
-          note notice "${downloads:-none}" "Project downloads in config.json"
-          [ -n "$pdfs" ] || { note error "no PDF in lectures/_build/html" "Downloads"; exit 1; }
-          linked=0 missing=0
-          while IFS= read -r f; do
-            name=${f##*/}
+          note notice "$(awk -F'\t' '{print $1 ": " $2 " (filename " $3 ", format " $4 ")"}' <<< "$downloads")" "Project downloads in config.json"
+          # Each PDF download config.json declares: its file under build/, and a
+          # link to it on every page, at the base the site is served under.
+          declared=$(awk -F'\t' '$2 ~ /[.]pdf$/ {n = split($2, a, "/"); print a[n]}' <<< "$downloads")
+          [ -n "$declared" ] || { note error "config.json declares no PDF download" "Downloads"; exit 1; }
+          bad=0
+          for name in $declared; do
+            want="$BASE_URL/build/$name"
+            [ -f "build/$name" ] || { note error "the declared download $name is not at build/$name" "Downloads"; bad=1; continue; }
             n=$( (grep -rlF --include=index.html "$name" . || true) | wc -l)
             urls=$( (grep -rhoE --include=index.html "[^\"'( \\\\]*/${name//./[.]}" . || true) | sort -u)
             found=""
             for u in $urls; do
-              p=${u#"$BASE_URL"}; p=${p#/}
-              if [ -f "$p" ]; then found+="$u -> $p (exists); "; else found+="$u -> $p (MISSING); "; missing=1; fi
+              if [ "$u" = "$want" ]; then found+="$u (ok); "; else found+="$u (not $want); "; bad=1; fi
             done
-            [ "$n" = 0 ] || linked=1
-            note notice "$f linked from $n of $pages pages: ${found:-no link}" "PDF links"
-          done < <(find . -name '*.pdf' -printf '%P\n' | sort)
-          [ "$linked" = 1 ] || { note error "no page links a PDF" "Downloads"; exit 1; }
-          [ "$missing" = 0 ] || { note error "a page links a PDF this tree does not hold" "Downloads"; exit 1; }
+            [ "$n" = "$pages" ] || bad=1
+            note notice "build/$name linked from $n of $pages pages: ${found:-no link}" "PDF links"
+          done
+          [ "$bad" = 0 ] || { note error "a declared PDF download is missing, not linked from every page, or linked off $BASE_URL/build/" "Downloads"; exit 1; }
 
       # The built site, for the rendered checks and the deploy, which are jobs of
       # their own so that the checks' rows can join the site before it is published.
