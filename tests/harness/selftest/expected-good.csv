@@ -21,6 +21,14 @@ code_cells,code-copy,present,desktop,light,pass,1 (1 visible)
 code_cells,code-copy,behaviour,desktop,light,pass,"(""import numpy as np x = np.linspace(0, 1, 5)""), its source"
 code_cells,code-copy,present,desktop,dark,pass,1 (1 visible)
 code_cells,code-copy,behaviour,desktop,dark,pass,"(""import numpy as np x = np.linspace(0, 1, 5)""), its source"
+code_cells,download-notebook,present,desktop,light,pass,control 1 (1 visible); items 0 (0 visible)
+code_cells,download-notebook,behaviour,desktop,light,pass,"""Notebook"", a menu item that downloads code_cells.ipynb when selected (its fetch:"
+code_cells,download-notebook,present,desktop,dark,pass,control 1 (1 visible); items 0 (0 visible)
+code_cells,download-notebook,behaviour,desktop,dark,pass,"""Notebook"", a menu item that downloads code_cells.ipynb when selected (its fetch:"
+code_cells,notebook-header,present,desktop,light,none,no locator
+code_cells,notebook-header,behaviour,desktop,light,skip,"the downloaded notebook's first cell is markdown: ""# Code cells (self-test)"""
+code_cells,notebook-header,present,desktop,dark,none,no locator
+code_cells,notebook-header,behaviour,desktop,dark,skip,"the downloaded notebook's first cell is markdown: ""# Code cells (self-test)"""
 code_cells,download-pdf,present,desktop,light,none,no locator
 code_cells,download-pdf,behaviour,desktop,light,none,no locator
 code_cells,download-pdf,present,desktop,dark,none,no locator

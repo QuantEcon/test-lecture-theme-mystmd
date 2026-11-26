@@ -21,6 +21,14 @@ code_cells,code-copy,present,desktop,light,pass,1 (1 visible)
 code_cells,code-copy,behaviour,desktop,light,fail,"the clipboard still holds the harness's marker, so the button copied nothing"
 code_cells,code-copy,present,desktop,dark,pass,1 (1 visible)
 code_cells,code-copy,behaviour,desktop,dark,skip,the clipboard could not be primed; a person checks it (writing the harness's marker failed
+code_cells,download-notebook,present,desktop,light,pass,control 1 (1 visible); items 0 (0 visible)
+code_cells,download-notebook,behaviour,desktop,light,fail,"build/missing.ipynb answers 404); this page's notebook (code_cells.ipynb) is ""Notebook"""
+code_cells,download-notebook,present,desktop,dark,pass,control 1 (1 visible); items 0 (0 visible)
+code_cells,download-notebook,behaviour,desktop,dark,fail,"build/missing.ipynb answers 404); this page's notebook (code_cells.ipynb) is ""Notebook"""
+code_cells,notebook-header,present,desktop,light,none,no locator
+code_cells,notebook-header,behaviour,desktop,light,skip,"missing.ipynb answers 404, so there is no downloaded notebook to read"
+code_cells,notebook-header,present,desktop,dark,none,no locator
+code_cells,notebook-header,behaviour,desktop,dark,skip,"missing.ipynb answers 404, so there is no downloaded notebook to read"
 code_cells,download-pdf,present,desktop,light,none,no locator
 code_cells,download-pdf,behaviour,desktop,light,none,no locator
 code_cells,download-pdf,present,desktop,dark,none,no locator

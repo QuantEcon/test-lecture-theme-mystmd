@@ -17,7 +17,8 @@ article main p{font-size:18px} .qe-collapse--input .qe-collapse__body{max-height
 .qe-collapse--input[data-expanded="true"] .qe-collapse__body{max-height:none} pre{margin:0}</style></head>
 <body>
 <div><ul><li><button type="button" class="qe-toc-toggle" aria-label="Table of contents">toc</button></li>
-<li><button aria-label="Change contrast">contrast</button></li></ul></div>
+<li><button aria-label="Change contrast">contrast</button></li>
+<li><button aria-label="Downloads">downloads</button></li></ul></div>
 <article class="article content"><main>
 <div><h1>Self-test Lectures, the title not linked</h1></div><p>A paragraph of lecture text, long enough to measure, with <a href="../">a link</a>.</p><!-- the drawn counts: one cell, with the empty outputs container of a cell with no output -->
 <div id="selftest-cell-1" class="myst-jp-nb-block relative group/block"><div class="myst-code relative group not-prose overflow-auto"><pre><code class="language-python">import numpy as np
@@ -38,4 +39,36 @@ if (document.documentElement.classList.contains("dark")) {
   og.setAttribute("content", og.getAttribute("content").replace("code-cells/", "typography/"));
   document.querySelector('meta[name="twitter:card"]').remove();
 }</script>
+<script>/* the Downloads menu as theme v3.2.1 draws it: Radix menu items with no link, shown only while the menu is open,
+   each fetching its file when selected and saving it through a hidden a[download] made for the moment. The book PDF answers 200; the notebook's fetch answers 404, and the 404 page is saved under its name, as the theme saves it */
+(function () {
+  const files = [["Book (PDF)", "{{base}}build/book.pdf", "book.pdf"], ["Notebook", "{{base}}build/missing.ipynb", "code_cells.ipynb"]];
+  const button = document.querySelector('button[aria-label="Downloads"]');
+  let menu = null;
+  const shut = () => { if (menu) { menu.remove(); menu = null; } };
+  button.addEventListener("click", () => {
+    if (menu) return shut();
+    menu = document.createElement("div");
+    menu.setAttribute("role", "menu");
+    for (const [title, url, name] of files) {
+      const item = document.createElement("div");
+      item.setAttribute("role", "menuitem");
+      item.textContent = title;
+      item.addEventListener("click", async () => {
+        shut();
+        const blob = await (await fetch(url)).blob();
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = name;
+        a.style.display = "none";
+        document.body.append(a);
+        a.click();
+        a.remove();
+      });
+      menu.append(item);
+    }
+    document.body.append(menu);
+  });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") shut(); });
+})();</script>
 </body></html>
