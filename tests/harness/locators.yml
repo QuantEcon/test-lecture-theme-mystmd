@@ -22,7 +22,7 @@
 source:
   repository: QuantEcon/project-theme-parity
   path: bin/site-features.yml
-  commit: 2452933f33371decb364de3443504b55374a1afc
+  commit: 757024df452240f450e5f46abf4836923e6cec6a
   side: mystmd
 features:
   - id: launch
@@ -38,7 +38,7 @@ features:
     locator:
       control: 'button[aria-label="Downloads"]'
       items: '[role="menu"] [role="menuitem"]'
-    behaviour: "open the control where it is a menu, and fetch each link"
+    behaviour: "open the control where it is a menu; fetch each link, or select each menu item and fetch the file it downloads"
   - id: download-pdf
     name: "A PDF of the page"
     page: code_cells

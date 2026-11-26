@@ -40,9 +40,9 @@ if (document.documentElement.classList.contains("dark")) {
   document.querySelector('meta[name="twitter:card"]').remove();
 }</script>
 <script>/* the Downloads menu as theme v3.2.1 draws it: Radix menu items with no link, shown only while the menu is open,
-   each fetching its file when selected and saving it through a hidden a[download] made for the moment. The book PDF answers 200; the notebook's fetch answers 404, and the 404 page is saved under its name, as the theme saves it */
+   each fetching its file when selected and saving it through a hidden a[download] made for the moment. Both fetches answer 404, and each 404 page is saved under the file's name, as the theme saves it */
 (function () {
-  const files = [["Book (PDF)", "{{base}}build/book.pdf", "book.pdf"], ["Notebook", "{{base}}build/missing.ipynb", "code_cells.ipynb"]];
+  const files = [["Book (PDF)", "{{base}}build/missing.pdf", "book.pdf"], ["Notebook", "{{base}}build/missing.ipynb", "code_cells.ipynb"]];
   const button = document.querySelector('button[aria-label="Downloads"]');
   let menu = null;
   const shut = () => { if (menu) { menu.remove(); menu = null; } };

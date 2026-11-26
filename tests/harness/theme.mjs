@@ -46,29 +46,36 @@ async function menuLinks(c, trigger, items = '[role="menu"] a[href]', what = "th
 // The Downloads menu's items. Theme v3.2.1 draws each download as a Radix menu item (div[role="menuitem"]) with no
 // link: selecting it fetches the file and saves it through a hidden a[download] it makes for the moment. So an item
 // with no link is selected, the menu opened again for each since selecting one closes it, and what it did is read:
-// the request the selection made (the file's URL and its status) and the download it started (the file's name).
+// the request the selection made (the file's URL) and the download it started (the file's name). The status is that
+// URL's, fetched as a link is (redirects followed, and retried when no answer comes).
 const DOWNLOAD_ITEMS = '[role="menu"] [role="menuitem"]';
 
-/** Select the menu's `i`th item: { url, status, error, file }, the first fetch it made and the file it downloaded. */
+/**
+ * Select the menu's `i`th item: { url, status, error, file }, the first fetch it made, that URL's answer and the file
+ * it downloaded. Every wait is inside the check's time budget, so a host that hangs leaves no answer (`skip`) and
+ * never a behaviour that outruns its limit.
+ */
 async function selectItem(c, trigger, items, i, label, what) {
   const { page } = c;
-  await press(trigger, what);
+  const left = () => Math.min(15_000, c.deadline - Date.now() - 2000);
+  if (left() < 3000) return { url: null, status: 0, error: "no time left in the check's budget to select it", file: null };
+  await press(trigger, what, { timeout: left() });
   await sleep(700);
   let first = null; // the item's own fetch; a route's data request (`_data=`) is the site's, not the item's
   const onRequest = (req) => { if (!first && ["fetch", "xhr"].includes(req.resourceType()) && !req.url().includes("_data=")) first = req; };
   page.on("request", onRequest);
+  let d = null;
   try {
-    const download = page.waitForEvent("download", { timeout: 15_000 }).catch(() => null);
-    await press(page.locator(items).nth(i), `the menu item "${label}"`);
-    const d = await download;
-    const res = first ? await first.response().catch(() => null) : null;
-    if (await page.locator('[role="menu"]').count()) { await page.keyboard.press("Escape"); await sleep(300); }
-    const file = d ? d.suggestedFilename() : null;
-    if (!first) return { url: null, status: 0, error: "selecting it made no request", file };
-    return res ? { url: first.url(), status: res.status(), file } : { url: first.url(), status: 0, error: first.failure()?.errorText ?? "no answer", file };
+    const download = page.waitForEvent("download", { timeout: Math.max(1000, left()) }).catch(() => null);
+    await press(page.locator(items).nth(i), `the menu item "${label}"`, { timeout: Math.max(1000, left()) });
+    d = await download;
   } finally {
     page.off("request", onRequest);
   }
+  if (await page.locator('[role="menu"]').count()) { await page.keyboard.press("Escape"); await sleep(300); }
+  const file = d ? d.suggestedFilename() : null;
+  if (!first) return { url: null, status: 0, error: "selecting it made no request", file };
+  return { ...(await c.fetch(first.url())), url: first.url(), file };
 }
 
 /** Open the menu and read its items, selecting each that is no link (`selected`, from selectItem). */
@@ -125,6 +132,17 @@ const behaviours = {
     // the page's notebook must be offered, and answer 200; what else the menu offers is evidence, not the test
     if (!mine.length) return fail(`${offers}; none is this page's notebook (${nb})`);
     return B.verdictOf(`${offers}; this page's notebook (${nb}) is ${mine.map((it) => `"${it.label}"`).join(", ")}`, mine.map((it) => it.result));
+  },
+
+  async "download-pdf"(c) {
+    // the PDF is a menu item, drawn only while the Downloads menu is open: select it, and fetch the file it downloads
+    const m = await menuItems(c, c.part("control").first(), c.selector("pdf"), "the downloads control");
+    if (!m.open) return fail("the downloads control opened no menu");
+    if (!m.links.length) return fail("the downloads menu offers no PDF");
+    const words = [];
+    for (const it of m.links) words.push(await itemWords(c, it));
+    const pdf = m.links.every((it) => /\.pdf$/i.test(it.selected?.file ?? (it.url ? new URL(it.url).pathname : "")));
+    return B.verdictOf(`the downloads menu offers ${words.join(", and ")}${pdf ? "" : "; not every one downloads a .pdf"}`, m.links.map((it) => it.result), { named: pdf });
   },
 
   async search(c) {

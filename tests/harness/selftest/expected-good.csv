@@ -29,10 +29,14 @@ code_cells,notebook-header,present,desktop,light,none,no locator
 code_cells,notebook-header,behaviour,desktop,light,skip,"the downloaded notebook's first cell is markdown: ""# Code cells (self-test)"""
 code_cells,notebook-header,present,desktop,dark,none,no locator
 code_cells,notebook-header,behaviour,desktop,dark,skip,"the downloaded notebook's first cell is markdown: ""# Code cells (self-test)"""
-code_cells,download-pdf,present,desktop,light,none,no locator
-code_cells,download-pdf,behaviour,desktop,light,none,no locator
-code_cells,download-pdf,present,desktop,dark,none,no locator
-code_cells,download-pdf,behaviour,desktop,dark,none,no locator
+code_cells,download-pdf,present,desktop,light,pass,control 1 (1 visible); pdf 0 (0 visible)
+code_cells,download-pdf,behaviour,desktop,light,pass,"""Book (PDF)"", a menu item that downloads book.pdf when selected (its fetch:"
+code_cells,download-pdf,present,desktop,dark,pass,control 1 (1 visible); pdf 0 (0 visible)
+code_cells,download-pdf,behaviour,desktop,dark,pass,"""Book (PDF)"", a menu item that downloads book.pdf when selected (its fetch:"
+typography,outline-copy-link,present,wide,light,none,no locator
+typography,outline-copy-link,behaviour,wide,light,none,no locator
+typography,outline-copy-link,present,wide,dark,none,no locator
+typography,outline-copy-link,behaviour,wide,dark,none,no locator
 long_cells,long-input,present,desktop,light,pass,1 (1 visible)
 long_cells,long-input,behaviour,desktop,light,pass,after a second press
 long_cells,long-input,present,desktop,dark,pass,1 (1 visible)

@@ -29,10 +29,14 @@ code_cells,notebook-header,present,desktop,light,none,no locator
 code_cells,notebook-header,behaviour,desktop,light,skip,"missing.ipynb answers 404, so there is no downloaded notebook to read"
 code_cells,notebook-header,present,desktop,dark,none,no locator
 code_cells,notebook-header,behaviour,desktop,dark,skip,"missing.ipynb answers 404, so there is no downloaded notebook to read"
-code_cells,download-pdf,present,desktop,light,none,no locator
-code_cells,download-pdf,behaviour,desktop,light,none,no locator
-code_cells,download-pdf,present,desktop,dark,none,no locator
-code_cells,download-pdf,behaviour,desktop,dark,none,no locator
+code_cells,download-pdf,present,desktop,light,pass,control 1 (1 visible); pdf 0 (0 visible)
+code_cells,download-pdf,behaviour,desktop,light,fail,build/missing.pdf answers 404)
+code_cells,download-pdf,present,desktop,dark,pass,control 1 (1 visible); pdf 0 (0 visible)
+code_cells,download-pdf,behaviour,desktop,dark,fail,build/missing.pdf answers 404)
+typography,outline-copy-link,present,wide,light,none,no locator
+typography,outline-copy-link,behaviour,wide,light,none,no locator
+typography,outline-copy-link,present,wide,dark,none,no locator
+typography,outline-copy-link,behaviour,wide,dark,none,no locator
 long_cells,long-input,present,desktop,light,error,answered 404
 long_cells,long-input,behaviour,desktop,light,error,answered 404
 long_cells,long-input,present,desktop,dark,error,answered 404
