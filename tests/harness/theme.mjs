@@ -200,7 +200,9 @@ const behaviours = {
     await btn.evaluate((b) => b.closest(".myst-code")?.scrollIntoView({ block: "center" }));
     await btn.locator("xpath=ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' myst-code ')][1]").hover().catch(() => {});
     await sleep(300);
-    const { text: clip, untouched } = await B.copyWith(page, () => press(btn, "the copy button"));
+    const copied = await B.copyWith(page, () => press(btn, "the copy button"));
+    if (!copied.primed) return B.unprimed(copied);
+    const { text: clip, untouched } = copied;
     const norm = (s) => (s ?? "").split("\n").map((l) => l.replace(/\s+$/, "")).join("\n").trim();
     const ok = want != null && !untouched && norm(clip) === norm(want);
     return { result: ok ? "pass" : "fail", detail: untouched ? "pressed on the first code block: the clipboard still holds the harness's marker, so the button copied nothing"

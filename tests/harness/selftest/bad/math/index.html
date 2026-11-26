@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Maths — self-test</title>
+<script>/* @myst-theme/site's BlockingThemeLoader: the saved choice, else the preference */
+const saved = localStorage.getItem("myst:theme");
+const pref = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+document.documentElement.classList.add(saved ?? pref);</script>
+<style>body{margin:0;font:16px sans-serif} html.dark body{background:#1c1917;color:#ddd} article main{max-width:800px;margin:0 auto}
+article main p{font-size:18px} .qe-collapse--input .qe-collapse__body{max-height:6em;overflow:hidden}
+.qe-collapse--input[data-expanded="true"] .qe-collapse__body{max-height:none} pre{margin:0}</style></head>
+<body>
+<div><ul><li><button type="button" class="qe-toc-toggle" aria-label="Table of contents">toc</button></li>
+<li><button aria-label="Change contrast">contrast</button></li></ul></div>
+<article class="article content"><main>
+<!-- maths that never rendered: TeX the parser did not take as maths, left in the page's text with its delimiters -->
+<p>A paragraph of lecture text, long enough to measure, with <a href="../">a link</a>, and $$\int_0^1 f(x) \, dx$$ in it.</p>
+<p>\begin{align} a &amp;= \bar{b} \end{align}</p>
+</main></article>
+<script>/* a broken toggle: the click does nothing */
+document.querySelector('button[aria-label="Change contrast"]').addEventListener("click", function () {});</script>
+</body></html>

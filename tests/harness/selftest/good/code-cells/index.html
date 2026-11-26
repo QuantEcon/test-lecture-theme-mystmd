@@ -1,5 +1,12 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>Code cells — self-test</title>
+<!-- the page's address, as a build made for the base writes it (the self-test replaces {{base}}) -->
+<link rel="canonical" href="https://quantecon.github.io{{base}}code-cells/">
+<meta property="og:url" content="https://quantecon.github.io{{base}}code-cells/">
+<meta property="og:title" content="Code cells">
+<meta property="og:image" content="https://assets.quantecon.org/img/qe-og-logo.png">
+<meta property="og:site_name" content="Self-test Lectures">
+<meta name="twitter:card" content="summary">
 <script>/* @myst-theme/site's BlockingThemeLoader: the saved choice, else the preference */
 const saved = localStorage.getItem("myst:theme");
 const pref = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
@@ -11,8 +18,12 @@ article main p{font-size:18px} .qe-collapse--input .qe-collapse__body{max-height
 <div><ul><li><button type="button" class="qe-toc-toggle" aria-label="Table of contents">toc</button></li>
 <li><button aria-label="Change contrast">contrast</button></li></ul></div>
 <article class="article content"><main>
-<div aria-label="Book title"><a href="../">Self-test Lectures</a></div><p>A paragraph of lecture text, long enough to measure, with <a href="../">a link</a>.</p><details class="qe-stderr"><summary>Code warnings</summary><div><pre>UserWarning: this goes to stderr</pre></div></details>
+<div aria-label="Book title"><a href="../">Self-test Lectures</a></div><p>A paragraph of lecture text, long enough to measure, with <a href="../">a link</a>.</p><div class="myst-code relative group not-prose overflow-auto"><pre><code class="language-python">import numpy as np
+x = np.linspace(0, 1, 5)</code></pre><button title="Copy to clipboard" aria-label="Copy code to clipboard" class="myst-code-copy-icon">copy</button></div><details class="qe-stderr"><summary>Code warnings</summary><div><pre>UserWarning: this goes to stderr</pre></div></details>
 </main></article>
+<script>/* a working copy button: the block's code to the clipboard */
+document.querySelector(".myst-code-copy-icon").addEventListener("click", function () {
+  navigator.clipboard.writeText(this.closest(".myst-code").querySelector("code").innerText); });</script>
 <script>/* a working toggle: switches the page and keeps the choice */
 document.querySelector('button[aria-label="Change contrast"]').addEventListener("click", function () {
   const dark = !document.documentElement.classList.contains("dark");

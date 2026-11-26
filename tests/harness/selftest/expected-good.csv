@@ -13,6 +13,14 @@ code_cells,stderr-fold,present,desktop,light,pass,1 (1 visible)
 code_cells,stderr-fold,behaviour,desktop,light,pass,on load: hidden; after the toggle: shown
 code_cells,stderr-fold,present,desktop,dark,pass,1 (1 visible)
 code_cells,stderr-fold,behaviour,desktop,dark,pass,on load: hidden; after the toggle: shown
+code_cells,page-meta,present,desktop,light,pass,canonical 1 (0 visible); og 4 (0 visible)
+code_cells,page-meta,behaviour,desktop,light,pass,"og:title, og:image, og:site_name and twitter:card present"
+code_cells,page-meta,present,desktop,dark,pass,canonical 1 (0 visible); og 4 (0 visible)
+code_cells,page-meta,behaviour,desktop,dark,pass,"og:title, og:image, og:site_name and twitter:card present"
+code_cells,code-copy,present,desktop,light,pass,1 (1 visible)
+code_cells,code-copy,behaviour,desktop,light,pass,"(""import numpy as np x = np.linspace(0, 1, 5)""), its source"
+code_cells,code-copy,present,desktop,dark,pass,1 (1 visible)
+code_cells,code-copy,behaviour,desktop,dark,pass,"(""import numpy as np x = np.linspace(0, 1, 5)""), its source"
 code_cells,download-pdf,present,desktop,light,none,no locator
 code_cells,download-pdf,behaviour,desktop,light,none,no locator
 code_cells,download-pdf,present,desktop,dark,none,no locator
@@ -97,3 +105,21 @@ long_cells,page,overflow,phone,light,pass,<= clientWidth
 long_cells,page,error-marker,phone,dark,pass,none of: mjx-merror
 long_cells,page,console,phone,dark,pass,no console error
 long_cells,page,overflow,phone,dark,pass,<= clientWidth
+math,page,error-marker,desktop,light,pass,none of: mjx-merror
+math,page,console,desktop,light,pass,no console error
+math,page,overflow,desktop,light,pass,<= clientWidth
+math,page,error-marker,desktop,dark,pass,none of: mjx-merror
+math,page,console,desktop,dark,pass,no console error
+math,page,overflow,desktop,dark,pass,<= clientWidth
+math,page,error-marker,tablet,light,pass,none of: mjx-merror
+math,page,console,tablet,light,pass,no console error
+math,page,overflow,tablet,light,pass,<= clientWidth
+math,page,error-marker,tablet,dark,pass,none of: mjx-merror
+math,page,console,tablet,dark,pass,no console error
+math,page,overflow,tablet,dark,pass,<= clientWidth
+math,page,error-marker,phone,light,pass,none of: mjx-merror
+math,page,console,phone,light,pass,no console error
+math,page,overflow,phone,light,pass,<= clientWidth
+math,page,error-marker,phone,dark,pass,none of: mjx-merror
+math,page,console,phone,dark,pass,no console error
+math,page,overflow,phone,dark,pass,<= clientWidth
