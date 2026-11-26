@@ -2,7 +2,7 @@
 
 *The QuantEcon theme-parity corpus built on the mystmd stack: the same content as [`test-lecture-theme-sphinx`](https://github.com/QuantEcon/test-lecture-theme-sphinx), built with the QuantEcon mystmd fork and `quantecon-theme.mystmd`, so the two renderings can be compared feature by feature.*
 
-Last updated: 2026-11-25
+Last updated: 2026-11-26
 
 > **This is a test repository.** Nothing here is a lecture. Do not link to it from a lecture site.
 
@@ -37,8 +37,10 @@ The engine is the **QuantEcon mystmd fork**, built from a pinned commit (`QE_MYS
 ```bash
 git clone --depth 1 --branch qe-v15 https://github.com/QuantEcon/mystmd /tmp/qe-mystmd && cd /tmp/qe-mystmd && bun install && bun run build
 npm install -g /tmp/qe-mystmd/packages/mystmd     # `myst --version` prints v1.13.0 (qe-v15)
-cd lectures && myst build --html --execute
+cd lectures && myst build --pdf --execute && myst build --html --execute
 ```
+
+The first build makes the book PDF that every page's Downloads menu offers (`project.exports` and `project.downloads` in `myst.yml`), with LaTeX (`xelatex` through `latexmk`) and the `plain_latex_book` template fetched from api.mystmd.org. The template loads `lmodern`, which the build image lacks, so CI installs Debian's `lmodern` package on top of it until the image carries it (QuantEcon/actions#353); it runs first because the site links an export only when its file exists. The HTML build then takes the code cells' outputs from the execution cache the first one filled, for the pages that ran without an error; the others run again. The PDF export drops what mystmd's LaTeX renderer has no rule for (exercises, solutions, the bibliography directive, iframes and some proof kinds), and CI lists it as warnings.
 
 The code cells execute in the `quantecon` conda environment of the image CI builds in — `ghcr.io/quantecon/quantecon-build`, pinned by digest in `.github/workflows/ci.yml` — the same image the Sphinx corpus uses, so the two corpora run one kernel (theme-parity decision D14). Locally, build inside that image, or create the environment from `containers/quantecon-build/environment.yml` in QuantEcon/actions. Node 24 runs the engine.
 

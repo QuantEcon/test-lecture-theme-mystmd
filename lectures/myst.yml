@@ -81,6 +81,24 @@ project:
   exclude:
     - README.md
     - _admonition/gpu.md
+  # The book PDF, offered in the toolbar's Downloads menu on every page, in the
+  # shape the theme's README gives (QuantEcon/project-theme-parity#63). CI
+  # builds it with `myst build --pdf --execute` before the HTML build, because
+  # the site links an export only once its file exists. `top_level: parts`
+  # makes each toc part a \part and each page a \chapter, as a lecture
+  # repository's book PDF has them. The file goes under _build/, which is
+  # gitignored and which bin/sync-from-sphinx keeps across a sync.
+  # A per-page notebook download needs page front matter, which this file
+  # cannot supply (the menu lists project downloads, then the page's own).
+  exports:
+    - id: book-pdf
+      format: pdf
+      template: plain_latex_book
+      top_level: parts
+      output: _build/exports/test-lecture-theme-mystmd.pdf
+  downloads:
+    - id: book-pdf
+      title: Book (PDF)
 site:
   # Pinned theme release; bump the vX.Y.Z to take a new theme.
   template: https://github.com/QuantEcon/quantecon-theme.mystmd/releases/download/v3.2.1/quantecon-theme.zip
