@@ -26,7 +26,11 @@ export const MARKERS = [
 //     environment. MathJax removes the delimiters Sphinx writes round each expression when it typesets it, so on
 //     Sphinx every one left is an expression that never rendered (all of them when MathJax's CDN fails); mystmd
 //     renders KaTeX at build, so there it is TeX the parser did not take as maths. Code, and the maths engines' own
-//     output (which carries the TeX in its annotation), are not read.
+//     output (which carries the TeX in its annotation), are not read; nor is a single `$…$`, as often a price as
+//     maths. Where MathJax is told to leave text alone it is not read either, by MathJax's own rule: the closest
+//     element (the text's own or an ancestor's) with one of the page's process or ignore classes decides, and a
+//     process class wins. A Sphinx page puts its whole text in a section MathJax ignores, and each expression in a
+//     .math element it processes, so the expressions are read and the prose round them is not.
 const MATHS_MARKERS = [
   "MathJax undefined macro (red \\name)",
   "inline maths error (mystmd's yellow KaTeX message)",
@@ -62,11 +66,25 @@ export async function errorMarkers(page) {
     if (inline.length) out.push({ name: maths[1], n: inline.length, texts: inline.slice(0, 3).map(short) });
 
     // TeX left with its delimiters in the page's text
-    const skip = "script, style, code, pre, kbd, samp, template, textarea, noscript, mjx-container, .katex, math, .tex2jax_ignore, .mathjax_ignore";
+    const skip = "script, style, code, pre, kbd, samp, template, textarea, noscript, mjx-container, .katex, math";
     const tex = /\\\([\s\S]+?\\\)|\\\[[\s\S]+?\\\]|\$\$[\s\S]+?\$\$|\\begin\{([A-Za-z]+\*?)\}[\s\S]*?\\end\{\1\}/g;
+    // the page's MathJax classes: its configuration (window.MathJax before MathJax loads, MathJax.config after), else
+    // the ones Sphinx and myst-nb use; a class list is a regular expression's alternatives, as MathJax reads it
+    const options = (window.MathJax?.config ?? window.MathJax)?.options ?? {};
+    const classes = (list, otherwise) => new RegExp(`(^|\\s)(${typeof list === "string" && list ? list : otherwise})(\\s|$)`);
+    const process = classes(options.processHtmlClass, "tex2jax_process|mathjax_process|math|output_area");
+    const ignore = classes(options.ignoreHtmlClass, "tex2jax_ignore|mathjax_ignore");
+    const ignored = (el) => {
+      for (let e = el; e; e = e.parentElement) {
+        const c = e.getAttribute("class") ?? "";
+        if (process.test(c)) return false;
+        if (ignore.test(c)) return true;
+      }
+      return false;
+    };
     const raw = [];
     const texts = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
-      acceptNode: (n) => (n.parentElement?.closest(skip) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
+      acceptNode: (n) => (n.parentElement?.closest(skip) || ignored(n.parentElement) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
     });
     for (let n; (n = texts.nextNode());) for (const m of n.nodeValue.matchAll(tex)) raw.push(m[0]);
     if (raw.length) {

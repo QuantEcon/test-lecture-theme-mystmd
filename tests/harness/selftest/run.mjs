@@ -17,8 +17,9 @@
 // and a hydration warning, an overflowing page, a null locator (`none`), a locator that matches nothing (`absent`), a
 // check that could not decide (`skip`), a behaviour that throws, a feature at the `wide` viewport, and `error` rows
 // for a page that is missing and for a page whose colour scheme does not take effect. Then run.mjs itself is run on
-// each build of the good site: served at the base it was built for, it checks it; at the other base, its build-base
-// check stops it with exit 2. Exit 1 on any mismatch, so the job fails before the real run. In GitHub Actions each
+// each build of the good site, with page-meta: served at the base it was built for, page-meta must pass, so run.mjs's
+// own reading of the base is checked, not only this file's; at the other base, its build-base check stops it with
+// exit 2. Exit 1 on any mismatch, so the job fails before the real run. In GitHub Actions each
 // site's mismatches are also an ::error:: annotation, so the run's annotations say what CI read.
 //
 // This file is the same in QuantEcon/test-lecture-theme-sphinx and QuantEcon/test-lecture-theme-mystmd.
@@ -85,23 +86,32 @@ async function check(name, dir, base, table) {
   }
 }
 
-// run.mjs on a build of the good site, one feature, no page-wide checks: the exit status and what it says on stderr
+// run.mjs on a build of the good site, page-meta alone, no page-wide checks: the exit status, what it says on stderr,
+// and its page-meta rows. Served at the base the build was made for, run.mjs must pass page-meta, which holds only
+// when run.mjs derives the page's address from the base it serves the site at; served at the other, its build-base
+// check must stop it with exit 2.
 async function baseCheck(dir, built) {
   const out = await mkdtemp(join(tmpdir(), "harness-selftest-out-"));
   const env = { ...process.env };
   delete env.GITHUB_STEP_SUMMARY; // this run's summary is not the job's
   const run = (base) => spawnSync(process.execPath, [join(HERE, "..", "run.mjs"), "--dir", dir, "--base-path", base,
-    "--table", join(HERE, "locators.yml"), "--only", "header-title", "--no-pages", "--quiet", "--out", out], { encoding: "utf8", env });
+    "--table", join(HERE, "locators.yml"), "--only", "page-meta", "--no-pages", "--quiet", "--out", out], { encoding: "utf8", env });
   const other = BASES.find((b) => b !== built);
   const problems = [];
   try {
-    const right = run(built), wrong = run(other);
+    const right = run(built);
     if (right.status !== 0) problems.push(`built for ${built}, at ${built}: expected exit 0, got ${right.status} (${right.stderr.trim().split("\n").pop()})`);
+    else {
+      const rows = parseCsv(await readFile(join(out, "rendered.csv"), "utf8")).filter((r) => r.family === "page-meta" && r.check === "behaviour");
+      if (rows.length !== 2) problems.push(`built for ${built}, at ${built}: expected 2 page-meta behaviour rows, got ${rows.length}`);
+      for (const r of rows) if (r.result !== "pass") problems.push(`built for ${built}, at ${built}: run.mjs's page-meta ${r.scheme}: expected pass, got ${r.result} (${r.detail})`);
+    }
+    const wrong = run(other);
     if (wrong.status !== 2 || !/was not built for the base/.test(wrong.stderr)) problems.push(`built for ${built}, at ${other}: expected exit 2 from the build-base check, got ${wrong.status} (${wrong.stderr.trim().split("\n").pop()})`);
   } finally {
     await rm(out, { recursive: true, force: true });
   }
-  console.log(`${problems.length ? "FAIL" : "ok  "} run.mjs's build-base check: the good site built for ${built} runs at ${built} and stops at ${other}${problems.length ? `, ${problems.length} mismatch(es)` : ""}`);
+  console.log(`${problems.length ? "FAIL" : "ok  "} run.mjs on the good site built for ${built}: page-meta passes at ${built}, and the build-base check stops it at ${other}${problems.length ? `, ${problems.length} mismatch(es)` : ""}`);
   for (const p of problems) console.log(`       ${p}`);
   return problems;
 }
@@ -126,7 +136,7 @@ try {
     if (!write) {
       const problems = await baseCheck(join(into, "good"), base);
       bad += problems.length;
-      if (problems.length) annotate("error", [`self-test: run.mjs's build-base check`, ...problems]);
+      if (problems.length) annotate("error", [`self-test: run.mjs on the good site built for ${base}`, ...problems]);
     }
   }
 } finally {

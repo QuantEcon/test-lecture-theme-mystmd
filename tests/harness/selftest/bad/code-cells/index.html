@@ -1,10 +1,13 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>Code cells — self-test</title>
-<!-- page-meta wrong at any base: the canonical link names another page, and og:url and twitter:card are missing -->
-<link rel="canonical" href="https://quantecon.github.io{{base}}">
+<!-- page-meta wrong at any base, two ways. In light only the canonical link is wrong: it names another page. In dark
+     the script at the end puts it right, names another page in og:url instead, and drops twitter:card -->
+<link rel="canonical" href="https://quantecon.github.io{{base}}typography/">
+<meta property="og:url" content="https://quantecon.github.io{{base}}code-cells/">
 <meta property="og:title" content="Code cells">
 <meta property="og:image" content="https://assets.quantecon.org/img/qe-og-logo.png">
 <meta property="og:site_name" content="Self-test Lectures">
+<meta name="twitter:card" content="summary">
 <script>/* @myst-theme/site's BlockingThemeLoader: the saved choice, else the preference */
 const saved = localStorage.getItem("myst:theme");
 const pref = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
@@ -27,4 +30,11 @@ if (document.documentElement.classList.contains("dark")) {
 <script>/* a broken toggle: the click does nothing */
 document.querySelector('button[aria-label="Change contrast"]').addEventListener("click", function () {});</script>
 <script>console.error("harness self-test: a console error on load");</script>
+<script>/* in dark: the canonical link right, og:url naming another page, and no twitter:card */
+if (document.documentElement.classList.contains("dark")) {
+  var canonical = document.querySelector('link[rel="canonical"]'), og = document.querySelector('meta[property="og:url"]');
+  canonical.setAttribute("href", og.getAttribute("content"));
+  og.setAttribute("content", og.getAttribute("content").replace("code-cells/", "typography/"));
+  document.querySelector('meta[name="twitter:card"]').remove();
+}</script>
 </body></html>

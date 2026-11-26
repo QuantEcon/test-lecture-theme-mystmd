@@ -13,14 +13,14 @@ code_cells,stderr-fold,present,desktop,light,pass,1 (1 visible)
 code_cells,stderr-fold,behaviour,desktop,light,fail,on load: shown
 code_cells,stderr-fold,present,desktop,dark,pass,1 (1 visible)
 code_cells,stderr-fold,behaviour,desktop,dark,fail,on load: shown
-code_cells,page-meta,present,desktop,light,pass,canonical 1 (0 visible); og 3 (0 visible)
-code_cells,page-meta,behaviour,desktop,light,fail,og:url none; missing twitter:card
-code_cells,page-meta,present,desktop,dark,pass,canonical 1 (0 visible); og 3 (0 visible)
-code_cells,page-meta,behaviour,desktop,dark,fail,og:url none; missing twitter:card
+code_cells,page-meta,present,desktop,light,pass,canonical 1 (0 visible); og 4 (0 visible)
+code_cells,page-meta,behaviour,desktop,light,fail,"code-cells/; og:title, og:image, og:site_name and twitter:card present"
+code_cells,page-meta,present,desktop,dark,pass,canonical 1 (0 visible); og 4 (0 visible)
+code_cells,page-meta,behaviour,desktop,dark,fail,typography/; missing twitter:card
 code_cells,code-copy,present,desktop,light,pass,1 (1 visible)
 code_cells,code-copy,behaviour,desktop,light,fail,"the clipboard still holds the harness's marker, so the button copied nothing"
 code_cells,code-copy,present,desktop,dark,pass,1 (1 visible)
-code_cells,code-copy,behaviour,desktop,dark,skip,the clipboard could not be primed; a person checks it
+code_cells,code-copy,behaviour,desktop,dark,skip,the clipboard could not be primed; a person checks it (writing the harness's marker failed
 code_cells,download-pdf,present,desktop,light,none,no locator
 code_cells,download-pdf,behaviour,desktop,light,none,no locator
 code_cells,download-pdf,present,desktop,dark,none,no locator
