@@ -1,0 +1,315 @@
+# drawn.yml -- this site's drawn selectors for the families' drawn checks (QuantEcon/project-theme-parity#15, D18).
+#
+# A copy of bin/drawn.yml in QuantEcon/project-theme-parity at the commit `source` names, taking only this theme's
+# side of each entry (`mystmd:`), with `each` expanded. It is a copy because that repository is private, and this
+# repository's CI cannot read it. The entries keep that file's order and its ids, which are bin/families.yml's: a row
+# of counts.csv is keyed by the family id, and that repository's bin/measure sets it beside this build's own engine
+# count (structure.csv), never beside the other site's.
+#
+# Each entry carries what a count needs:
+#   id         the family id, expanded (`prf-theorem`, `heading-h2`)
+#   selector   this theme's selector over the page's content: a Playwright selector (CSS, with `:has()`, `:text-is()`,
+#              `:text-matches()` and `:has-text()` allowed), every element it matches counting; or {select, in, text},
+#              the elements `select` matches whose own text, or the text of their first `in` descendant, whitespace
+#              collapsed and trimmed, matches the regular expression `text`, compiled as a JavaScript RegExp with the
+#              `u` flag; or null where this theme draws no surface a selector can count, which counts.csv records by
+#              writing no rows for it, not as a count of 0
+#   why        only where the selector is null: invisible, inline-maths, report, styling, anchor, no-surface or text
+#   corrected  only where a selector had moved on this site's build: {from: the selector as copied, why: what moved}
+#
+# Every selector was checked against this site's build before it was copied here. One that has moved is corrected
+# here, with its `corrected:` note, and carried in provenance.json, until bin/drawn.yml carries it too; this
+# repository cannot change that file, so the PR that makes a correction proposes it there. None is open on this site.
+source:
+  repository: QuantEcon/project-theme-parity
+  path: bin/drawn.yml
+  commit: 41e66d5f63a0bddbb40ab8e92d0334ea9b14a28b
+  side: mystmd
+families:
+  - id: code-cell
+    selector: "article div.myst-jp-nb-block[id]"
+  - id: cell-output
+    selector: 'article div[data-name="outputs-container"]:has(> *)'
+  - id: code-cell-tagged
+    selector: null
+    why: no-surface
+  - id: tag-hide-input
+    selector: "article div.myst-jp-nb-block details.myst-dropdown:has(> .myst-dropdown-body > .myst-code)"
+  - id: tag-hide-output
+    selector: 'article div.myst-jp-nb-block details.myst-dropdown:has(> .myst-dropdown-body > [data-name="outputs-container"])'
+  - id: tag-hide-cell
+    selector: "article details.myst-dropdown:has(> .myst-dropdown-body > .myst-jp-nb-block)"
+  - id: tag-raises-exception
+    selector: null
+    why: no-surface
+  - id: tag-skip-execution
+    selector: null
+    why: invisible
+  - id: tag-collapse-20
+    selector: 'article .qe-collapse--input[style*="--qe-collapse-cap:20.5em"], article .qe-collapse--input[style*="--qe-collapse-cap: 20.5em"]'
+  - id: tag-no-execute
+    selector: null
+    why: invisible
+  - id: tag-scroll-output-renamed
+    selector: 'article .qe-collapse--output[style*="--qe-collapse-cap:24.5em"], article .qe-collapse--output[style*="--qe-collapse-cap: 24.5em"]'
+  - id: code-block
+    selector: "article div.myst-code:not(.myst-jp-nb-block *)"
+  - id: code-block-class
+    selector: null
+    why: styling
+  - id: math-display
+    selector: "article .katex-display"
+  - id: math-labelled
+    selector: null
+    why: anchor
+  - id: env-bmatrix
+    selector: null
+    why: no-surface
+  - id: env-aligned
+    selector: null
+    why: no-surface
+  - id: env-array
+    selector: null
+    why: no-surface
+  - id: env-pmatrix
+    selector: null
+    why: no-surface
+  - id: env-cases
+    selector: null
+    why: no-surface
+  - id: env-matrix
+    selector: null
+    why: no-surface
+  - id: env-split
+    selector: null
+    why: no-surface
+  - id: env-align
+    selector: null
+    why: no-surface
+  - id: env-gathered
+    selector: null
+    why: no-surface
+  - id: "env-align*"
+    selector: null
+    why: no-surface
+  - id: env-equation-wrapper
+    selector: null
+    why: report
+  - id: "env-equation*-wrapper"
+    selector: null
+    why: report
+  - id: math-inline
+    selector: null
+    why: inline-maths
+  - id: math-inline-simplified
+    selector: null
+    why: inline-maths
+  - id: figure
+    selector: "article figure.fig-figure:has(img)"
+  - id: figure-from-cell
+    selector: "article figure.myst-jp-figure"
+  - id: image
+    selector: "article main img:not(figure *):not(.myst-jp-nb-block *):not(nav *)"
+  - id: figure-named
+    selector: null
+    why: anchor
+  - id: figure-width
+    selector: null
+    why: styling
+  - id: figure-height
+    selector: null
+    why: styling
+  - id: figure-align
+    selector: null
+    why: styling
+  - id: figure-figclass
+    selector: null
+    why: styling
+  - id: image-align
+    selector: null
+    why: styling
+  - id: image-named
+    selector: null
+    why: anchor
+  - id: table
+    selector: 'article table:not([data-name="outputs-container"] *)'
+  - id: admonition-note
+    selector: 'article .myst-admonition-note:not(.note):has(> .myst-admonition-header > .myst-admonition-header-text:text-is("Note"))'
+  - id: admonition-warning
+    selector: 'article .myst-admonition-warning:not(.warning):has(> .myst-admonition-header > .myst-admonition-header-text:text-is("Warning"))'
+  - id: admonition-tip
+    selector: 'article .myst-admonition-tip:not(.tip):has(> .myst-admonition-header > .myst-admonition-header-text:text-is("Tip"))'
+  - id: admonition-important
+    selector: 'article .myst-admonition-important:not(.important):has(> .myst-admonition-header > .myst-admonition-header-text:text-is("Important"))'
+  - id: admonition-hint
+    selector: 'article .myst-admonition-hint:not(.hint):has(> .myst-admonition-header > .myst-admonition-header-text:text-is("Hint"))'
+  - id: admonition-seealso
+    selector: 'article .myst-admonition-seealso:not(.seealso):has(> .myst-admonition-header > .myst-admonition-header-text:text-is("See Also"))'
+  - id: admonition-titled
+    selector: 'article .myst-admonition:not(:has(> .myst-admonition-header > .myst-admonition-header-text:text-matches("^(Note|Warning|Tip|Important|Hint|See Also)$")))'
+  - id: admonition-class
+    selector: null
+    why: styling
+  - id: hint-dropdown
+    selector: "article details.myst-admonition-hint.dropdown"
+  - id: note-named
+    selector: null
+    why: anchor
+  - id: epigraph
+    selector: "article figure.fig-quote"
+  - id: exercise
+    selector:
+      select: "article .myst-exercise"
+      in: ".myst-exercise-header"
+      text: "^Exercise\\b"
+  - id: solution
+    selector:
+      select: "article .myst-exercise"
+      in: ".myst-exercise-header"
+      text: "^Solution\\b"
+  - id: exercise-labelled
+    selector: null
+    why: anchor
+  - id: solution-labelled
+    selector: null
+    why: anchor
+  - id: solution-dropdown
+    selector:
+      select: "article details.myst-exercise"
+      in: "summary.myst-exercise-header"
+      text: "^Solution\\b"
+  - id: prf-definition
+    selector:
+      select: "article .myst-proof"
+      in: ".myst-proof-header"
+      text: "^Definition\\b"
+  - id: prf-example
+    selector:
+      select: "article .myst-proof"
+      in: ".myst-proof-header"
+      text: "^Example\\b"
+  - id: prf-lemma
+    selector:
+      select: "article .myst-proof"
+      in: ".myst-proof-header"
+      text: "^Lemma\\b"
+  - id: prf-proposition
+    selector:
+      select: "article .myst-proof"
+      in: ".myst-proof-header"
+      text: "^Proposition\\b"
+  - id: prf-assumption
+    selector:
+      select: "article .myst-proof"
+      in: ".myst-proof-header"
+      text: "^Assumption\\b"
+  - id: prf-corollary
+    selector:
+      select: "article .myst-proof"
+      in: ".myst-proof-header"
+      text: "^Corollary\\b"
+  - id: prf-remark
+    selector:
+      select: "article .myst-proof"
+      in: ".myst-proof-header"
+      text: "^Remark\\b"
+  - id: prf-property
+    selector:
+      select: "article .myst-proof"
+      in: ".myst-proof-header"
+      text: "^Property\\b"
+  - id: prf-algorithm
+    selector:
+      select: "article .myst-proof"
+      in: ".myst-proof-header"
+      text: "^Algorithm\\b"
+  - id: prf-proof
+    selector:
+      select: "article .myst-proof"
+      in: ".myst-proof-header"
+      text: "^Proof\\b"
+  - id: prf-theorem
+    selector:
+      select: "article .myst-proof"
+      in: ".myst-proof-header"
+      text: "^Theorem\\b"
+  - id: prf-nonumber
+    selector: null
+    why: text
+  - id: prf-labelled-definition
+    selector: null
+    why: anchor
+  - id: prf-labelled-example
+    selector: null
+    why: anchor
+  - id: prf-labelled-proposition
+    selector: null
+    why: anchor
+  - id: prf-labelled-assumption
+    selector: null
+    why: anchor
+  - id: prf-labelled-lemma
+    selector: null
+    why: anchor
+  - id: prf-labelled-remark
+    selector: null
+    why: anchor
+  - id: prf-labelled-algorithm
+    selector: null
+    why: anchor
+  - id: prf-labelled-corollary
+    selector: null
+    why: anchor
+  - id: prf-labelled-property
+    selector: null
+    why: anchor
+  - id: prf-labelled-theorem
+    selector: null
+    why: anchor
+  - id: heading-h1
+    selector: 'article h1, article:not(:has(h1)) [aria-label="Book title"]'
+  - id: heading-h2
+    selector: "article h2:has(> span.select-none)"
+  - id: heading-h3
+    selector: "article h3:has(> span.select-none)"
+  - id: heading-h4
+    selector: "article h4:has(> span.select-none)"
+  - id: heading-h5
+    selector: "article h5:has(> span.select-none)"
+  - id: blockquote
+    selector: "article blockquote:not(figure *)"
+  - id: definition-list
+    selector: "article dl"
+  - id: footnote-definition
+    selector: "article .myst-footnotes-item"
+  - id: footnote-reference
+    selector: 'article a[aria-label="Link to Footnote"]'
+  - id: comment
+    selector: null
+    why: invisible
+  - id: role-download
+    selector: 'article a[href*="/build/"]'
+  - id: role-eq
+    selector:
+      select: "article a.hover-link"
+      text: "^\\(\\s*\\d+\\s*\\)$"
+  - id: role-prf-ref
+    selector: null
+    why: no-surface
+  - id: citation
+    selector: "article span.cite-group"
+  - id: cite-narrative
+    selector: "article span.cite-group.narrative"
+  - id: cite-parenthetical
+    selector: "article span.cite-group.parenthetical"
+  - id: ref-target
+    selector: null
+    why: no-surface
+  - id: index-directive
+    selector: null
+    why: invisible
+  - id: index-role
+    selector: null
+    why: invisible
+  - id: contents
+    selector: "article h2:not(:has(> span.select-none)):not(nav *) + ul"

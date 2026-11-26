@@ -19,19 +19,29 @@
 // for a page that is missing and for a page whose colour scheme does not take effect. Then run.mjs itself is run on
 // each build of the good site, with page-meta: served at the base it was built for, page-meta must pass, so run.mjs's
 // own reading of the base is checked, not only this file's; at the other base, its build-base check stops it with
-// exit 2. Exit 1 on any mismatch, so the job fails before the real run. In GitHub Actions each
-// site's mismatches are also an ::error:: annotation, so the run's annotations say what CI read.
+// exit 2.
+//
+// The drawn counts (D18) are taken in the same runs, with drawn.yml, the format of ../drawn.yml, and compared with
+// expected-<site>-counts.csv exactly, number for number and row for row, in order: a visible surface and one inside
+// a closed fold (drawn but not shown), one a style hides, a text-matched selector that keeps one box and drops
+// another, pages where nothing matches (0), a null family (no rows), a selector that throws (empty), and the missing
+// page and the page whose scheme does not take effect (empty). Then run.mjs is run on each build of the good site
+// with that table, on one page: it must write the same counts, record the selector that threw in provenance.json,
+// and exit 1 for it; and its run without page-wide checks must write no counts.csv.
+//
+// Exit 1 on any mismatch, so the job fails before the real run. In GitHub Actions each site's mismatches are also an
+// ::error:: annotation, so the run's annotations say what CI read.
 //
 // This file is the same in QuantEcon/test-lecture-theme-sphinx and QuantEcon/test-lecture-theme-mystmd.
 import { spawnSync } from "node:child_process";
-import { cp, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { access, cp, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { keyOf, parseCsv, toCsv } from "../lib/csv.mjs";
+import { countKeyOf, keyOf, parseCountsCsv, parseCsv, toCountsCsv, toCsv } from "../lib/csv.mjs";
 import { runChecks } from "../lib/engine.mjs";
 import { serve } from "../lib/server.mjs";
-import { readTable } from "../lib/table.mjs";
+import { readDrawn, readTable } from "../lib/table.mjs";
 import theme from "../theme.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -61,12 +71,28 @@ async function build(name, base, into) {
   return out;
 }
 
+/** The counts against the expected ones: every row there, in the same place, with the same two numbers. */
+function compareCounts(want, counts) {
+  const problems = [];
+  const got = new Map(counts.map((c) => [countKeyOf(c), c]));
+  const shown = (c) => `${c.drawn === "" ? "empty" : c.drawn}/${c.shown === "" ? "empty" : c.shown}`;
+  for (const w of want) {
+    const g = got.get(countKeyOf(w));
+    got.delete(countKeyOf(w));
+    if (!g) problems.push(`counts: missing: ${countKeyOf(w)}`);
+    else if (String(g.drawn) !== w.drawn || String(g.shown) !== w.shown) problems.push(`counts: ${countKeyOf(w)}: expected drawn/shown ${shown(w)}, got ${shown(g)}`);
+  }
+  for (const k of got.keys()) problems.push(`counts: unexpected row: ${k} ${shown(got.get(k))}`);
+  if (!problems.length && want.map(countKeyOf).join("\n") !== counts.map(countKeyOf).join("\n")) problems.push("counts: the rows are not in the expected order");
+  return problems;
+}
+
 async function check(name, dir, base, table) {
   const server = await serve(dir, base);
   try {
     const site = { mode: "dir", base: server.base, url: server.url, origin: new URL(server.url).origin, publishedBase: new URL(server.base, theme.publishedBase).href };
-    const { rows } = await runChecks({ theme, table, site, order: PAGES, jobs: 4 });
-    if (write) { process.stdout.write(`--- ${name} at ${base}\n${toCsv(rows)}`); return []; }
+    const { rows, counts } = await runChecks({ theme, table, drawn, site, order: PAGES, jobs: 4 });
+    if (write) { process.stdout.write(`--- ${name} at ${base}\n${toCsv(rows)}--- ${name} at ${base}, counts\n${toCountsCsv(counts)}`); return []; }
     const want = parseCsv(await readFile(join(HERE, `expected-${name}.csv`), "utf8"));
     const got = new Map(rows.map((r) => [keyOf(r), r]));
     const problems = [];
@@ -78,7 +104,9 @@ async function check(name, dir, base, table) {
       else if (w.detail && !g.detail.includes(w.detail)) problems.push(`${keyOf(w)}: the detail "${g.detail}" does not contain "${w.detail}"`);
     }
     for (const k of got.keys()) problems.push(`unexpected row: ${k} ${got.get(k).result} (${got.get(k).detail})`);
-    console.log(`${problems.length ? "FAIL" : "ok  "} ${name} at ${base}: ${want.length} expected rows, ${rows.length} written${problems.length ? `, ${problems.length} mismatch(es)` : ""}`);
+    const wantCounts = parseCountsCsv(await readFile(join(HERE, `expected-${name}-counts.csv`), "utf8"));
+    problems.push(...compareCounts(wantCounts, counts));
+    console.log(`${problems.length ? "FAIL" : "ok  "} ${name} at ${base}: ${want.length} expected rows, ${rows.length} written; ${wantCounts.length} expected counts, ${counts.length} taken${problems.length ? `; ${problems.length} mismatch(es)` : ""}`);
     for (const p of problems) console.log(`       ${p}`);
     return problems;
   } finally {
@@ -94,6 +122,7 @@ async function baseCheck(dir, built) {
   const out = await mkdtemp(join(tmpdir(), "harness-selftest-out-"));
   const env = { ...process.env };
   delete env.GITHUB_STEP_SUMMARY; // this run's summary is not the job's
+  delete env.GITHUB_ACTIONS; // nor are its annotations
   const run = (base) => spawnSync(process.execPath, [join(HERE, "..", "run.mjs"), "--dir", dir, "--base-path", base,
     "--table", join(HERE, "locators.yml"), "--only", "page-meta", "--no-pages", "--quiet", "--out", out], { encoding: "utf8", env });
   const other = BASES.find((b) => b !== built);
@@ -105,6 +134,10 @@ async function baseCheck(dir, built) {
       const rows = parseCsv(await readFile(join(out, "rendered.csv"), "utf8")).filter((r) => r.family === "page-meta" && r.check === "behaviour");
       if (rows.length !== 2) problems.push(`built for ${built}, at ${built}: expected 2 page-meta behaviour rows, got ${rows.length}`);
       for (const r of rows) if (r.result !== "pass") problems.push(`built for ${built}, at ${built}: run.mjs's page-meta ${r.scheme}: expected pass, got ${r.result} (${r.detail})`);
+      // no page-wide checks, no counts: no counts.csv, and provenance says none were taken
+      const prov = JSON.parse(await readFile(join(out, "provenance.json"), "utf8"));
+      if (await access(join(out, "counts.csv")).then(() => true, () => false)) problems.push(`built for ${built}, at ${built}: run.mjs --no-pages wrote a counts.csv`);
+      if (prov.schema !== 2 || prov.drawn !== null || JSON.stringify(prov.outputs) !== '["rendered.csv"]') problems.push(`built for ${built}, at ${built}: run.mjs --no-pages: expected provenance schema 2, drawn null and outputs ["rendered.csv"], got schema ${prov.schema}, drawn ${JSON.stringify(prov.drawn)?.slice(0, 80)}, outputs ${JSON.stringify(prov.outputs)}`);
     }
     const wrong = run(other);
     if (wrong.status !== 2 || !/was not built for the base/.test(wrong.stderr)) problems.push(`built for ${built}, at ${other}: expected exit 2 from the build-base check, got ${wrong.status} (${wrong.stderr.trim().split("\n").pop()})`);
@@ -116,7 +149,44 @@ async function baseCheck(dir, built) {
   return problems;
 }
 
+// run.mjs on a build of the good site, with this drawn table, on the page intro: its counts.csv must hold the intro
+// rows of expected-good-counts.csv, its provenance.json must name the selector that threw at each of the six readings,
+// and it must exit 1 for that alone (no check of its own could not run).
+const DRAWN_PAGE = "intro";
+async function drawnCheck(dir, base) {
+  const out = await mkdtemp(join(tmpdir(), "harness-selftest-out-"));
+  const env = { ...process.env };
+  delete env.GITHUB_STEP_SUMMARY;
+  delete env.GITHUB_ACTIONS;
+  const problems = [];
+  try {
+    const r = spawnSync(process.execPath, [join(HERE, "..", "run.mjs"), "--dir", dir, "--base-path", base, "--table", join(HERE, "locators.yml"),
+      "--drawn", join(HERE, "drawn.yml"), "--only", "header-title", "--pages", DRAWN_PAGE, "--quiet", "--out", out], { encoding: "utf8", env });
+    if (r.status !== 1) problems.push(`expected exit 1 for the selector that throws, got ${r.status} (${(r.stderr || r.stdout).trim().split("\n").pop()})`);
+    const read = async (f) => readFile(join(out, f), "utf8").catch(() => null);
+    const [rendered, counts, prov] = [await read("rendered.csv"), await read("counts.csv"), JSON.parse((await read("provenance.json")) ?? "null")];
+    if (!rendered || !counts || !prov) problems.push(`expected rendered.csv, counts.csv and provenance.json, got ${[rendered && "rendered.csv", counts && "counts.csv", prov && "provenance.json"].filter(Boolean).join(", ") || "none"}`);
+    else {
+      const errors = parseCsv(rendered).filter((x) => x.result === "error");
+      if (errors.length) problems.push(`expected no error rows, got ${errors.length} (${errors[0].page} ${errors[0].family} ${errors[0].check}: ${errors[0].detail})`);
+      const want = parseCountsCsv(await readFile(join(HERE, "expected-good-counts.csv"), "utf8")).filter((x) => x.page === DRAWN_PAGE);
+      problems.push(...compareCounts(want, parseCountsCsv(counts)));
+      const threw = (prov.drawn?.uncounted ?? []).filter((u) => u.family);
+      const thrower = drawn.counted.find((f) => typeof f.selector === "string" && f.selector.endsWith(":captioned"))?.id;
+      if (prov.schema !== 2 || JSON.stringify(prov.outputs) !== '["rendered.csv","counts.csv"]') problems.push(`expected provenance schema 2 with outputs rendered.csv and counts.csv, got schema ${prov.schema}, outputs ${JSON.stringify(prov.outputs)}`);
+      if (prov.drawn?.rows !== want.length || prov.drawn?.families !== drawn.counted.length) problems.push(`expected provenance drawn.rows ${want.length} and drawn.families ${drawn.counted.length}, got ${prov.drawn?.rows} and ${prov.drawn?.families}`);
+      if (threw.length !== 6 || threw.some((u) => u.family !== thrower || !/^the selector threw: /.test(u.why))) problems.push(`expected provenance drawn.uncounted to name ${thrower}'s selector at the six readings, got ${JSON.stringify(threw).slice(0, 300)}`);
+    }
+  } finally {
+    await rm(out, { recursive: true, force: true });
+  }
+  console.log(`${problems.length ? "FAIL" : "ok  "} run.mjs's counts on the good site built for ${base}, at ${DRAWN_PAGE}: the counts written, the selector that threw recorded, exit 1${problems.length ? `, ${problems.length} mismatch(es)` : ""}`);
+  for (const p of problems) console.log(`       ${p}`);
+  return problems;
+}
+
 const table = await readTable(join(HERE, "locators.yml"), theme.side);
+const drawn = await readDrawn(join(HERE, "drawn.yml"), theme.side);
 const work = await mkdtemp(join(tmpdir(), "harness-selftest-"));
 let bad = 0;
 try {
@@ -137,11 +207,14 @@ try {
       const problems = await baseCheck(join(into, "good"), base);
       bad += problems.length;
       if (problems.length) annotate("error", [`self-test: run.mjs on the good site built for ${base}`, ...problems]);
+      const counted = await drawnCheck(join(into, "good"), base);
+      bad += counted.length;
+      if (counted.length) annotate("error", [`self-test: run.mjs's counts on the good site built for ${base}`, ...counted]);
     }
   }
 } finally {
   await rm(work, { recursive: true, force: true });
 }
 if (!write) console.log(bad ? "the self-test failed: the harness does not read its fixtures as expected" : "the self-test passed");
-if (!write && !bad) annotate("notice", [`self-test passed: both fixture sites read as expected at ${BASES.join(" and ")}`]);
+if (!write && !bad) annotate("notice", [`self-test passed: both fixture sites read as expected at ${BASES.join(" and ")}, their rows and their drawn counts`]);
 process.exit(bad ? 1 : 0);
