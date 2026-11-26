@@ -1,4 +1,5 @@
-// Helpers every check uses: viewports, page loads with one retry, settling, counting a locator, fetching a link.
+// Helpers every check uses: viewports, page loads with one retry, settling, counting a locator or a drawn selector,
+// fetching a link.
 //
 // This file is the same in QuantEcon/test-lecture-theme-sphinx and QuantEcon/test-lecture-theme-mystmd.
 
@@ -58,11 +59,19 @@ export async function settleBase(page) {
   await stableDom(page);
 }
 
-// Visible as Playwright means it: a non-empty bounding box and no `visibility: hidden`.
-const COUNT = (els) => [
-  els.length,
-  els.filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && (e.checkVisibility ? e.checkVisibility({ visibilityProperty: true }) : getComputedStyle(e).visibility !== "hidden"); }).length,
-];
+// Visible as Playwright means it: a non-empty bounding box and no `visibility: hidden`. [matched, visible]. With a
+// text filter (a drawn selector's {in, text}), only the elements whose own text, or the text of their first `in`
+// descendant, whitespace collapsed and trimmed, matches the regular expression `text` (the `u` flag) are counted.
+const COUNT = (els, filter) => {
+  if (filter?.text != null) {
+    const re = new RegExp(filter.text, "u");
+    els = els.filter((e) => { const t = filter.in ? e.querySelector(filter.in) : e; return !!t && re.test((t.textContent ?? "").replace(/\s+/g, " ").trim()); });
+  }
+  return [
+    els.length,
+    els.filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && (e.checkVisibility ? e.checkVisibility({ visibilityProperty: true }) : getComputedStyle(e).visibility !== "hidden"); }).length,
+  ];
+};
 
 /** The locator's parts: a string is one unnamed part, a mapping is named parts, null is no locator. */
 export function partsOf(locator) {
@@ -81,6 +90,20 @@ export async function countParts(page, locator) {
     out.push({ name, selector, matched, visible });
   }
   return out;
+}
+
+/**
+ * Count a family's drawn selector on the page (drawn.yml; D18): { drawn, shown }. `drawn` is every element the
+ * selector matches, shown or not; `shown` how many of those are visible, by the test `present` counts with. A string
+ * is a Playwright selector, every match counting; {select, in, text} counts the elements `select` matches whose text
+ * matches `text` (COUNT above). Nothing is scrolled, hovered or opened, so what a fold hides is drawn and not shown. A
+ * selector the page cannot parse throws, and the count is not taken.
+ */
+export async function countDrawn(page, selector) {
+  const spec = typeof selector === "string" ? { select: selector } : selector;
+  const filter = spec.text != null ? { in: spec.in ?? null, text: spec.text } : null;
+  const [drawn, shown] = await page.locator(spec.select).evaluateAll(COUNT, filter);
+  return { drawn, shown };
 }
 
 export function describeCounts(counts) {

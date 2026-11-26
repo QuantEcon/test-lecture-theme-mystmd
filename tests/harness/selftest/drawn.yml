@@ -1,0 +1,36 @@
+# The self-test's drawn table: the format of ../drawn.yml, with six of its entries. Four carry this site's real
+# selector, so the fixtures in good/ and bad/ are counted as the real pages are; `math-inline` is null, as it is
+# there, so the self-test sees a family that writes no rows; and `figure` is given a selector the browser cannot
+# parse, so its count is never taken: empty on every page, and run.mjs exits 1. Between them, on the fixtures:
+#   code-cell           good code-cells, two cells, both shown (the theme's id-less toolbar block inside the first
+#                       left out); bad code-cells, one
+#   cell-output         good code-cells, an output inside a closed dropdown: drawn 1, shown 0 (the first cell's empty
+#                       outputs container left out)
+#   solution            {select, in, text}: good typography, the text filter keeps the solution's box and drops the
+#                       exercise's; bad typography, a solution hidden by a style: drawn 1, shown 0
+#   cite-parenthetical  good typography, one of two citations
+# Every page where nothing matches is a row of 0; bad's missing page (long_cells) and its intro in dark, whose
+# scheme does not take effect, are empty. The counts are compared with expected-<site>-counts.csv.
+source:
+  repository: QuantEcon/project-theme-parity
+  path: bin/drawn.yml
+  commit: 41e66d5f63a0bddbb40ab8e92d0334ea9b14a28b
+  side: mystmd
+families:
+  - id: code-cell
+    selector: "article div.myst-jp-nb-block[id]"
+  - id: cell-output
+    selector: 'article div[data-name="outputs-container"]:has(> *)'
+  - id: solution
+    selector:
+      select: "article .myst-exercise"
+      in: ".myst-exercise-header"
+      text: "^Solution\\b"
+  - id: cite-parenthetical
+    selector: "article span.cite-group.parenthetical"
+  - id: math-inline
+    selector: null
+    why: inline-maths
+  - id: figure
+    # not this site's selector: a pseudo-class the browser does not know, so the selector throws
+    selector: "article figure:captioned"

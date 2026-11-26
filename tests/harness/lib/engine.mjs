@@ -1,5 +1,6 @@
 // The run: every site feature on its page, at its viewport, in both colour schemes; then the page-wide checks on every
-// page at the three viewports, in both schemes. Each check gets a fresh browser context, so nothing one check writes
+// page at the three viewports, in both schemes, and in the same page loads the families' drawn counts (D18). Each
+// check gets a fresh browser context, so nothing one check writes
 // (`localStorage`, a cookie, the scroll position) reaches another, and on the live sites, which share the origin
 // quantecon.github.io, nothing one site writes reaches the other's checks.
 //
@@ -8,7 +9,7 @@
 // error marker looks like, and how each feature's behaviour is exercised.
 import { chromium } from "@playwright/test";
 import { SCHEMES } from "./csv.mjs";
-import { PAGE_VIEWPORTS, VIEWPORTS, SiteFault, countParts, describeCounts, fetchUrl, load, oneLine, partsOf, withTimeout } from "./util.mjs";
+import { PAGE_VIEWPORTS, VIEWPORTS, SiteFault, countDrawn, countParts, describeCounts, fetchUrl, load, oneLine, partsOf, withTimeout } from "./util.mjs";
 
 const HYDRATION = /hydrat|did not match|server rendered HTML|Minified React error #(418|419|421|422|423|425)/i;
 
@@ -44,6 +45,15 @@ async function newContext(browser, theme, viewport, scheme, origin) {
 
 function rowsOf(base, checks, result, detail) {
   return checks.map((check) => ({ ...base, check, result, detail }));
+}
+
+/** The page's drawn counts not taken: an empty count for every family, and one `uncounted` entry saying why. */
+function notTaken(drawn, where, why) {
+  if (!drawn) return { counts: [], uncounted: [] };
+  return {
+    counts: drawn.counted.map((f) => ({ ...where, family: f.id, drawn: "", shown: "" })),
+    uncounted: [{ ...where, family: null, why }],
+  };
 }
 
 async function featureTask(browser, run, f, scheme) {
@@ -110,20 +120,30 @@ async function featureTask(browser, run, f, scheme) {
   }
 }
 
+// The page-wide checks on one page at one reading, then the drawn counts in the same load: { rows, counts, uncounted }.
+// A page that does not load, or whose scheme does not take effect, gives error rows and empty counts; a selector that
+// throws gives that family an empty count and an `uncounted` entry, which makes the run exit 1.
 async function pageTask(browser, run, stem, viewport, scheme) {
-  const { theme, site } = run;
+  const { theme, site, drawn } = run;
   const base = { page: stem, family: "page", viewport, scheme };
+  const where = { page: stem, viewport, scheme };
   const checks = ["error-marker", "console", "overflow"];
   const ctx = await newContext(browser, theme, viewport, scheme, site.origin);
   try {
     const page = await ctx.newPage();
     const w = watch(page);
     const nav = await load(page, site.url + theme.pagePath(stem));
-    if (!nav.ok) return rowsOf(base, checks, "error", `the page did not load: ${nav.detail}`);
+    if (!nav.ok) {
+      const why = `the page did not load: ${nav.detail}`;
+      return { rows: rowsOf(base, checks, "error", why), ...notTaken(drawn, where, why) };
+    }
     await theme.settle(page);
     const snap = w.snapshot();
     const sch = await theme.verifyScheme(page, scheme);
-    if (!sch.ok) return rowsOf(base, checks, "error", `the ${scheme} scheme did not take effect: ${sch.detail}`);
+    if (!sch.ok) {
+      const why = `the ${scheme} scheme did not take effect: ${sch.detail}`;
+      return { rows: rowsOf(base, checks, "error", why), ...notTaken(drawn, where, why) };
+    }
     const rows = [];
     try {
       const m = await theme.errorMarkers(page);
@@ -142,7 +162,18 @@ async function pageTask(browser, run, stem, viewport, scheme) {
     } catch (e) {
       rows.push({ ...base, check: "overflow", result: "error", detail: `the widths could not be read: ${oneLine(e.message, 200)}` });
     }
-    return rows;
+    // the drawn counts: after settling, the scheme check and the error markers, in this load; one evaluation per family
+    const counts = [], uncounted = [];
+    for (const f of drawn?.counted ?? []) {
+      try {
+        const c = await countDrawn(page, f.selector);
+        counts.push({ ...where, family: f.id, drawn: c.drawn, shown: c.shown });
+      } catch (e) {
+        counts.push({ ...where, family: f.id, drawn: "", shown: "" });
+        uncounted.push({ ...where, family: f.id, why: `the selector threw: ${oneLine(e.message, 200)}` });
+      }
+    }
+    return { rows, counts, uncounted };
   } finally {
     await ctx.close().catch(() => {});
   }
@@ -164,27 +195,36 @@ async function pool(tasks, jobs) {
 /**
  * Run every check. `site` is { url, origin, publishedBase, mode, base }: `url` the site's base URL, ending in "/".
  * `order` is every page of the site in its order, which the behaviours read (another page, previous and next, the
- * contents); `pages` the pages to give the page-wide checks, by default all of them.
- * Resolves to { rows, browserVersion }, the rows in the order: features in the table's order (light, then dark;
- * present, then behaviour), then pages in the site's order (desktop, tablet, phone; light, then dark).
+ * contents); `pages` the pages to give the page-wide checks, by default all of them. `drawn` is the drawn table
+ * (table.mjs's readDrawn), or null for no counts; the counts are taken in the page-wide checks' loads, so none are
+ * taken without them.
+ * Resolves to { rows, counts, uncounted, browserVersion }, the rows in the order: features in the table's order
+ * (light, then dark; present, then behaviour), then pages in the site's order (desktop, tablet, phone; light, then
+ * dark); the counts in the pages' order, then the families in the drawn table's order; `uncounted` each reading not
+ * taken, {page, viewport, scheme, family (null for the whole page), why}.
  */
-export async function runChecks({ theme, table, site, order, pages = order, jobs = 4, only = null, pageChecks = true, onTask = () => {} }) {
+export async function runChecks({ theme, table, drawn = null, site, order, pages = order, jobs = 4, only = null, pageChecks = true, onTask = () => {} }) {
   const browser = await chromium.launch(process.env.HARNESS_CHROMIUM ? { executablePath: process.env.HARNESS_CHROMIUM } : {});
   site = { ...site, pages: order };
-  const run = { theme, site };
+  const run = { theme, site, drawn };
   try {
     const tasks = [];
     for (const f of table.features) {
       if (only && !only.has(f.id)) continue;
-      for (const scheme of SCHEMES) tasks.push(async () => { const r = await featureTask(browser, run, f, scheme); onTask(`${f.id} ${scheme}`, r); return r; });
+      for (const scheme of SCHEMES) tasks.push(async () => { const rows = await featureTask(browser, run, f, scheme); onTask(`${f.id} ${scheme}`, rows); return { rows }; });
     }
     if (pageChecks) {
       for (const stem of pages) for (const viewport of PAGE_VIEWPORTS) for (const scheme of SCHEMES) {
-        tasks.push(async () => { const r = await pageTask(browser, run, stem, viewport, scheme); onTask(`${stem} ${viewport} ${scheme}`, r); return r; });
+        tasks.push(async () => { const r = await pageTask(browser, run, stem, viewport, scheme); onTask(`${stem} ${viewport} ${scheme}`, r.rows); return r; });
       }
     }
-    const rows = (await pool(tasks, jobs)).flat();
-    return { rows, browserVersion: browser.version() };
+    const done = await pool(tasks, jobs);
+    return {
+      rows: done.flatMap((r) => r.rows),
+      counts: done.flatMap((r) => r.counts ?? []),
+      uncounted: done.flatMap((r) => r.uncounted ?? []),
+      browserVersion: browser.version(),
+    };
   } finally {
     await browser.close().catch(() => {});
   }
