@@ -341,7 +341,9 @@ if (process.env.GITHUB_ACTIONS === "true" && resolve(process.argv[1] ?? "") === 
       if (!rows.length) return;
       const text = rows.map((r) => `${r.family} ${r.check} ${r.viewport} ${r.scheme}: ${r.result}: ${r.detail}`).join("\n").slice(0, 4000);
       const escape = (x) => x.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
-      writeSync(1, `::notice title=Rows of ${NOTICE_FAMILIES.join(", ")}::${escape(text)}\n`);
+      // a property's value also escapes `,` and `:`, which would end it
+      const title = escape(`Rows of ${NOTICE_FAMILIES.join(", ")}`).replace(/,/g, "%2C").replace(/:/g, "%3A");
+      writeSync(1, `::notice title=${title}::${escape(text)}\n`);
     } catch {}
   });
 }
