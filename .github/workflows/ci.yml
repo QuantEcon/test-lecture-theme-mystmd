@@ -150,6 +150,36 @@ jobs:
           python -m pip install --no-cache-dir -r lectures/requirements.txt
           echo "PIP_CONSTRAINT=$GITHUB_WORKSPACE/lectures/requirements.txt" >> "$GITHUB_ENV"
 
+      # The book PDF the Downloads menu offers (`project.exports` in
+      # lectures/myst.yml; QuantEcon/project-theme-parity#63). It is built before
+      # the HTML because the site build links an export only when its file
+      # already exists. It executes the code cells, so the PDF carries their
+      # outputs, and the HTML build then takes the same outputs from the
+      # execution cache (_build/execute) rather than running the cells again.
+      # LaTeX is the image's (xelatex through latexmk); the template is fetched
+      # from api.mystmd.org. myst exits 0 when LaTeX fails, so the file is
+      # checked here, and what LaTeX reported is raised as annotations.
+      - name: Build the book PDF (executing the code cells)
+        working-directory: lectures
+        run: |
+          note() { local m=$2; m=${m//'%'/'%25'}; m=${m//$'\r'/'%0D'}; m=${m//$'\n'/'%0A'}; echo "::$1 title=$3::$m"; }
+          log="$RUNNER_TEMP/myst-pdf.log"
+          myst build --pdf --execute 2>&1 | tee "$log"
+          problems=$(sed 's/\x1b\[[0-9;]*m//g' "$log" | grep -E 'LaTeX Error|🛑|⛔' | sort -u | head -20 || true)
+          [ -z "$problems" ] || note warning "$problems" "Errors reported while building the PDF"
+          pdf=_build/exports/test-lecture-theme-mystmd.pdf
+          if [ ! -s "$pdf" ]; then
+            note error "no PDF at lectures/$pdf" "PDF export"
+            exit 1
+          fi
+          templates=$(cd _build/templates 2>/dev/null && find . -mindepth 3 -maxdepth 3 -type d -printf '%P ' || true)
+          cached=$(find _build/execute -type f 2>/dev/null | wc -l)
+          note notice "lectures/$pdf, $(stat -c %s "$pdf") bytes; template ${templates:-not found}; execution cache ${cached} files" "PDF built"
+        env:
+          # As in the HTML build below, so the cells execute under the same
+          # environment whichever step runs them.
+          NODE_OPTIONS: --dns-result-order=ipv4first
+
       - name: Build HTML (executing the code cells)
         working-directory: lectures
         run: myst build --html --execute
@@ -185,6 +215,47 @@ jobs:
             exit 1
           fi
           echo "executed with Python $py; git history on all $pages pages"
+
+      # The downloads in the site that is uploaded: the files themselves (the
+      # build copies an export under build/, with a hashed name), the project's
+      # `downloads` as config.json lists them, and the links the pages carry,
+      # each of which must resolve to a file in this tree. Raised as
+      # annotations, so a run's check-runs record what the site holds.
+      - name: Check the downloads reached the site
+        working-directory: lectures/_build/html
+        env:
+          BASE_URL: ${{ github.event_name == 'push' && format('/{0}', github.event.repository.name) || '' }}
+        run: |
+          note() { local m=$2; m=${m//'%'/'%25'}; m=${m//$'\r'/'%0D'}; m=${m//$'\n'/'%0A'}; echo "::$1 title=$3::$m"; }
+          pages=$(find . -name index.html | wc -l)
+          pdfs=$(find . -name '*.pdf' -printf '%P (%s bytes)\n' | sort)
+          nbs=$(find . -name '*.ipynb' -printf '%P\n' | sort)
+          note notice "${pdfs:-none}" "PDF files in the site"
+          note notice "$(grep -c . <<< "$nbs" || true) files${nbs:+$'\n'}${nbs}" "Notebook files in the site"
+          downloads=$(python - <<'PY'
+          import json
+          for proj in json.load(open("config.json")).get("projects", []):
+              for d in proj.get("downloads") or []:
+                  print(f'{d.get("title")}: {d.get("url")} (filename {d.get("filename")}, format {d.get("format")})')
+          PY
+          )
+          note notice "${downloads:-none}" "Project downloads in config.json"
+          [ -n "$pdfs" ] || { note error "no PDF in lectures/_build/html" "Downloads"; exit 1; }
+          linked=0 missing=0
+          while IFS= read -r f; do
+            name=${f##*/}
+            n=$( (grep -rlF --include=index.html "$name" . || true) | wc -l)
+            urls=$( (grep -rhoE --include=index.html "[^\"'( \\\\]*/${name//./[.]}" . || true) | sort -u)
+            found=""
+            for u in $urls; do
+              p=${u#"$BASE_URL"}; p=${p#/}
+              if [ -f "$p" ]; then found+="$u -> $p (exists); "; else found+="$u -> $p (MISSING); "; missing=1; fi
+            done
+            [ "$n" = 0 ] || linked=1
+            note notice "$f linked from $n of $pages pages: ${found:-no link}" "PDF links"
+          done < <(find . -name '*.pdf' -printf '%P\n' | sort)
+          [ "$linked" = 1 ] || { note error "no page links a PDF" "Downloads"; exit 1; }
+          [ "$missing" = 0 ] || { note error "a page links a PDF this tree does not hold" "Downloads"; exit 1; }
 
       # The built site, for the rendered checks and the deploy, which are jobs of
       # their own so that the checks' rows can join the site before it is published.
