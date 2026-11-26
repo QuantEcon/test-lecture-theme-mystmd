@@ -1,11 +1,14 @@
 // What is particular to this site, quantecon-theme.mystmd on the QuantEcon mystmd fork: how a page is addressed,
 // how a colour scheme is set and checked, when a page has settled, and the behaviours whose markup is this theme's
 // own. The engine (lib/) is the same in both corpora; this file is the mystmd side of the contract.
+import { readFileSync, writeSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import YAML from "yaml";
 import { press, settleBase, stableDom, oneLine, said, sleep } from "./lib/util.mjs";
 import { MARKER_NAMES, errorMarkers } from "./lib/markers.mjs";
+import { parseCsv } from "./lib/csv.mjs";
 import * as B from "./lib/behave.mjs";
 const { pass, fail, skip, yes } = B;
 
@@ -27,16 +30,78 @@ const profile = {
 };
 
 
-/** Open a Radix menu by its trigger and read its links; Escape closes it again. */
+/** Open a Radix menu by its trigger and read its items: each one's label, and its link (its own or one inside it), or
+ * null; Escape closes it again. */
 async function menuLinks(c, trigger, items = '[role="menu"] a[href]', what = "the menu control") {
   await press(trigger, what);
   await sleep(700);
-  const links = await c.page.locator(items).evaluateAll((as) => as.map((a) => ({ label: a.textContent.trim(), href: a.getAttribute("href") })));
+  const links = await c.page.locator(items).evaluateAll((as) => as.map((a) => ({
+    label: a.textContent.trim(), href: a.getAttribute("href") ?? a.querySelector("a[href]")?.getAttribute("href") ?? null })));
   const open = await c.page.locator('[role="menu"]').count();
   await c.page.keyboard.press("Escape");
   await sleep(300);
   return { open: open > 0, links };
 }
+
+// The Downloads menu's items. Theme v3.2.1 draws each download as a Radix menu item (div[role="menuitem"]) with no
+// link: selecting it fetches the file and saves it through a hidden a[download] it makes for the moment. So an item
+// with no link is selected, the menu opened again for each since selecting one closes it, and what it did is read:
+// the request the selection made (the file's URL) and the download it started (the file's name). The status is that
+// URL's, fetched as a link is (redirects followed, and retried when no answer comes).
+const DOWNLOAD_ITEMS = '[role="menu"] [role="menuitem"]';
+
+/**
+ * Select the menu's `i`th item: { url, status, error, file }, the first fetch it made, that URL's answer and the file
+ * it downloaded. Every wait is inside the check's time budget, so a host that hangs leaves no answer (`skip`) and
+ * never a behaviour that outruns its limit.
+ */
+async function selectItem(c, trigger, items, i, label, what) {
+  const { page } = c;
+  const left = () => Math.min(15_000, c.deadline - Date.now() - 2000);
+  if (left() < 3000) return { url: null, status: 0, error: "no time left in the check's budget to select it", file: null };
+  await press(trigger, what, { timeout: left() });
+  await sleep(700);
+  let first = null; // the item's own fetch; a route's data request (`_data=`) is the site's, not the item's
+  const onRequest = (req) => { if (!first && ["fetch", "xhr"].includes(req.resourceType()) && !req.url().includes("_data=")) first = req; };
+  page.on("request", onRequest);
+  let d = null;
+  try {
+    const download = page.waitForEvent("download", { timeout: Math.max(1000, left()) }).catch(() => null);
+    await press(page.locator(items).nth(i), `the menu item "${label}"`, { timeout: Math.max(1000, left()) });
+    d = await download;
+  } finally {
+    page.off("request", onRequest);
+  }
+  if (await page.locator('[role="menu"]').count()) { await page.keyboard.press("Escape"); await sleep(300); }
+  const file = d ? d.suggestedFilename() : null;
+  if (!first) return { url: null, status: 0, error: "selecting it made no request", file };
+  return { ...(await c.fetch(first.url())), url: first.url(), file };
+}
+
+/** Open the menu and read its items, selecting each that is no link (`selected`, from selectItem). */
+async function menuItems(c, trigger, items, what) {
+  const m = await menuLinks(c, trigger, items, what);
+  for (const [i, it] of m.links.entries()) if (!it.href) it.selected = await selectItem(c, trigger, items, i, it.label, what);
+  return m;
+}
+
+/** An item in words: a link and what it answers, or what selecting a menu item did. */
+async function itemWords(c, it) {
+  if (it.href) {
+    const u = new URL(it.href, c.page.url()).href;
+    it.result = await c.fetch(u);
+    it.url = u;
+    return `"${it.label}", a link to ${said(u, it.result)}`;
+  }
+  const s = it.selected;
+  it.result = s;
+  it.url = s.url;
+  const got = s.file ? `downloads ${s.file} when selected` : "starts no download when selected";
+  return `"${it.label}", a menu item that ${got} (${s.url ? `its fetch: ${said(s.url, s)}` : s.error})`;
+}
+
+/** Does the item give this page's notebook? Its URL's file, or the name of the file it downloads. */
+const givesNotebook = (it, stem) => (it.url && new URL(it.url).pathname.endsWith(`/${stem}.ipynb`)) || it.selected?.file === `${stem}.ipynb`;
 
 const behaviours = {
   ...B.commonBehaviours(profile),
@@ -56,10 +121,28 @@ const behaviours = {
   },
 
   async "download-notebook"(c) {
-    const m = await menuLinks(c, c.part("control").first(), c.selector("items"), "the downloads control");
+    const m = await menuItems(c, c.part("control").first(), c.selector("items"), "the downloads control");
     if (!m.open) return fail("the downloads control opened no menu");
     if (!m.links.length) return fail("the downloads menu opens empty: a downloads control with nothing in it (QuantEcon/quantecon-theme.mystmd#212)");
-    return B.downloadLinks(c, m.links.map((l) => l.href));
+    const words = [];
+    for (const it of m.links) words.push(await itemWords(c, it));
+    const nb = `${c.feature.page}.ipynb`;
+    const mine = m.links.filter((it) => givesNotebook(it, c.feature.page));
+    const offers = `the downloads menu offers ${words.join(", and ")}`;
+    // the page's notebook must be offered, and answer 200; what else the menu offers is evidence, not the test
+    if (!mine.length) return fail(`${offers}; none is this page's notebook (${nb})`);
+    return B.verdictOf(`${offers}; this page's notebook (${nb}) is ${mine.map((it) => `"${it.label}"`).join(", ")}`, mine.map((it) => it.result));
+  },
+
+  async "download-pdf"(c) {
+    // the PDF is a menu item, drawn only while the Downloads menu is open: select it, and fetch the file it downloads
+    const m = await menuItems(c, c.part("control").first(), c.selector("pdf"), "the downloads control");
+    if (!m.open) return fail("the downloads control opened no menu");
+    if (!m.links.length) return fail("the downloads menu offers no PDF");
+    const words = [];
+    for (const it of m.links) words.push(await itemWords(c, it));
+    const pdf = m.links.every((it) => /\.pdf$/i.test(it.selected?.file ?? (it.url ? new URL(it.url).pathname : "")));
+    return B.verdictOf(`the downloads menu offers ${words.join(", and ")}${pdf ? "" : "; not every one downloads a .pdf"}`, m.links.map((it) => it.result), { named: pdf });
   },
 
   async search(c) {
@@ -182,12 +265,15 @@ const behaviours = {
   async "notebook-header"(c) {
     const control = c.page.locator('button[aria-label="Downloads"]').first();
     if (!(await control.count())) return skip("the page has no downloads control, so there is no notebook to read; a person compares the two stacks' notebooks");
-    const m = await menuLinks(c, control, undefined, "the downloads control");
-    const nb = m.links.find((l) => /\.ipynb(\?|#|$)/.test(l.href));
-    if (!nb) return skip(`the site offers no notebook download (the downloads menu holds ${m.links.length ? m.links.map((l) => l.label).join(", ") : "nothing"}), so there is no notebook to read; a person compares the two stacks' notebooks`);
-    const u = new URL(nb.href, c.page.url()).href;
+    const m = await menuItems(c, control, DOWNLOAD_ITEMS, "the downloads control");
+    const words = [];
+    for (const it of m.links) words.push(await itemWords(c, it));
+    const nb = m.links.find((it) => (it.url && /\.ipynb$/.test(new URL(it.url).pathname)) || /\.ipynb$/.test(it.selected?.file ?? ""));
+    if (!nb) return skip(`the site offers no notebook download (the downloads menu ${m.links.length ? `offers ${words.join(", and ")}` : "holds nothing"}), so there is no notebook to read; a person compares the two stacks' notebooks`);
+    const u = nb.url;
+    if (!u) return skip(`"${nb.label}" downloads ${nb.selected.file} when selected, but ${nb.selected.error}, so there is no notebook to read; a person compares the two stacks' notebooks`);
     const r = await c.fetch(u, { body: true });
-    if (r.status !== 200) return skip(`the page's notebook link resolves to ${said(u, r)}, so there is no downloaded notebook to read`);
+    if (r.status !== 200) return skip(`the page's notebook, "${nb.label}", cannot be read: ${said(u, r)}, so there is no downloaded notebook to read`);
     let first = "(not a notebook)";
     try { const j = JSON.parse(r.body); const cell = j.cells?.[0]; first = cell ? `${cell.cell_type}: "${oneLine([].concat(cell.source).join(""), 140)}"` : "(no cells)"; } catch {}
     return skip(`the downloaded notebook's first cell is ${first}. Whether it is this feature's parity is the owner's verdict (QuantEcon/quantecon-theme.mystmd#204)`);
@@ -256,6 +342,29 @@ const behaviours = {
   },
 };
 behaviours["notebook-header"].withoutLocator = true;
+
+// A notice on the run listing the rows of the families below, so CI's reading of them is on the check run's
+// annotations, readable without the artefact (as run.mjs's notice gives the drawn counts). It is written as run.mjs
+// exits, from the rendered.csv it wrote, only in GitHub Actions and only for run.mjs itself (the self-test's runs are
+// not the job's), and nothing in it can change the exit status. The families: those this site's last locator change
+// touched (QuantEcon/project-theme-parity#74).
+const NOTICE_FAMILIES = ["download-notebook", "download-pdf", "notebook-header"];
+const HERE = dirname(fileURLToPath(import.meta.url));
+if (process.env.GITHUB_ACTIONS === "true" && resolve(process.argv[1] ?? "") === join(HERE, "run.mjs")) {
+  process.once("exit", () => {
+    try {
+      const at = process.argv.indexOf("--out");
+      const out = at > 0 ? resolve(process.argv[at + 1]) : join(HERE, "..", "..", "_harness");
+      const rows = parseCsv(readFileSync(join(out, "rendered.csv"), "utf8")).filter((r) => NOTICE_FAMILIES.includes(r.family));
+      if (!rows.length) return;
+      const text = rows.map((r) => `${r.family} ${r.check} ${r.viewport} ${r.scheme}: ${r.result}: ${r.detail}`).join("\n").slice(0, 4000);
+      const escape = (x) => x.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
+      // a property's value also escapes `,` and `:`, which would end it
+      const title = escape(`Rows of ${NOTICE_FAMILIES.join(", ")}`).replace(/,/g, "%2C").replace(/:/g, "%3A");
+      writeSync(1, `::notice title=${title}::${escape(text)}\n`);
+    } catch {}
+  });
+}
 
 export default {
   side: "mystmd",
