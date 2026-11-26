@@ -16,7 +16,7 @@ kernelspec:
 ```
 
 % Patterns from lecture-python.myst (cite, cite:t, a link to a section
-% label), lecture-python-intro (numref, download, a link to an `eq:` label),
+% label), lecture-python-intro (numref, download, a link to a page by name),
 % continuous_time_mcs (prf:ref) and lecture-python-programming (the {any} role).
 
 ## Targets and the `ref` role
@@ -32,17 +32,21 @@ takes its text from a heading: {ref}`a-section-target`.
 
 Sections carry targets too: see {ref}`this section <a-section-target>`.
 
-## Links to a label
+## Links to a label or a page
 
-% lecture-python.myst/odu.md @ eb065995 (the section, with text) and
-% lecture-python-intro/commod_price.md @ 16a2705a (the equation, with none).
-% The lectures write 151 such links in 40 files (2026-11-26): 89 to a plain
-% label, 59 to an `eq:` label, every one of those with no text, and 3 to a
-% label with another prefix. Here the equation is on the mathematics page.
+% QuantEcon/lecture-python.myst odu.md @ eb065995 (a section, with text) and
+% QuantEcon/lecture-python-intro long_run_growth.md @ 16a2705a (a page by its
+% name, with text). The lectures write 151 Markdown links whose URL is a bare
+% label or page name, in 40 files (2026-11-26). By target: 104 go to an
+% equation on the same page (101 with no text; the two cases are on the
+% mathematics page), 18 to a section, with text (11 on the same page), 12 to a
+% page by its name (8 with text), 7 to the label at the top of another page,
+% 6 to an exercise and 4 to a code cell. The page here is status: most corpus
+% pages carry a label equal to their name, which a link to them would match as
+% well, and no lecture page linked this way does.
 A Markdown link can take a label where a URL would go. The lectures use it for
 a section, with text of their own, as in the section [shown above](a-section-target),
-and for an equation labelled in the `eq:` form, with no text, so that the link
-reads as the equation's number: the Cagan demand for money is [](eq:cagan_demand).
+and for a page, by its name, as in [the execution statistics](status).
 
 ## The `doc` role
 

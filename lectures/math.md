@@ -40,6 +40,12 @@ $$ (eq:cagan_demand)
 
 Equation {eq}`eq:cagan_demand` is the Cagan demand for money.
 
+% QuantEcon/lecture-python-intro commod_price.md @ 16a2705a. A Markdown link to
+% an equation's label, on the same page and with no text, is how 101 of the
+% lectures' 151 links to a bare label are written (references.md has the count).
+A Markdown link whose URL is the label, with no text, also reads as the
+equation's number: the demand for money is [](eq:cagan_demand).
+
 The `{math}` directive with a `:label:` option is the other labelled form
 (1,927 uses, 1,845 of them labelled):
 
@@ -50,6 +56,10 @@ n_t(s^t) + \ell_t(s^t) = 1
 ```
 
 The feasibility constraint {eq}`feas1_amss` holds state by state.
+
+% QuantEcon/lecture-python-intro olg.md @ 16a2705a: the same link, to a
+% `{math}` label, as 41 of the lectures' equation links are.
+A `{math}` label takes the same link: the constraint is [](feas1_amss).
 
 ### Numbers written as inline maths
 
