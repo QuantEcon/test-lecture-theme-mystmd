@@ -150,23 +150,39 @@ jobs:
           python -m pip install --no-cache-dir -r lectures/requirements.txt
           echo "PIP_CONSTRAINT=$GITHUB_WORKSPACE/lectures/requirements.txt" >> "$GITHUB_ENV"
 
+      # The plain_latex_book template loads lmodern, which the image lacks:
+      # Debian ships it as a package of its own, a recommendation of texlive
+      # that the image's --no-install-recommends leaves out. A TeX font never
+      # reaches a code cell, so, like Node above, it is outside what D14 holds
+      # constant. The image could carry it instead (QuantEcon/actions,
+      # containers/quantecon-build), and this step would then go.
+      - name: Install the Latin Modern fonts the PDF template loads
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends lmodern
+          kpsewhich lmodern.sty
+
       # The book PDF the Downloads menu offers (`project.exports` in
       # lectures/myst.yml; QuantEcon/project-theme-parity#63). It is built before
       # the HTML because the site build links an export only when its file
       # already exists. It executes the code cells, so the PDF carries their
       # outputs, and the HTML build then takes the same outputs from the
       # execution cache (_build/execute) rather than running the cells again.
-      # LaTeX is the image's (xelatex through latexmk); the template is fetched
-      # from api.mystmd.org. myst exits 0 when LaTeX fails, so the file is
-      # checked here, and what LaTeX reported is raised as annotations.
+      # LaTeX is the image's (xelatex through latexmk), with the one package
+      # the step before adds; the template is fetched from api.mystmd.org. myst
+      # exits 0 when LaTeX fails, so the file is checked here, and what myst
+      # and TeX reported is raised as annotations.
       - name: Build the book PDF (executing the code cells)
         working-directory: lectures
         run: |
           note() { local m=$2; m=${m//'%'/'%25'}; m=${m//$'\r'/'%0D'}; m=${m//$'\n'/'%0A'}; echo "::$1 title=$3::$m"; }
           log="$RUNNER_TEMP/myst-pdf.log"
           myst build --pdf --execute 2>&1 | tee "$log"
-          problems=$(sed 's/\x1b\[[0-9;]*m//g' "$log" | grep -E 'LaTeX Error|🛑|⛔' | sort -u | head -20 || true)
-          [ -z "$problems" ] || note warning "$problems" "Errors reported while building the PDF"
+          myst_errors=$(sed 's/\x1b\[[0-9;]*m//g' "$log" | grep -F '🛑' | sort -u | head -15 || true)
+          [ -z "$myst_errors" ] || note warning "$myst_errors" "myst errors in the PDF build"
+          # TeX's errors, from the log latexmk leaves beside the .tex (-file-line-error form)
+          tex_errors=$(find _build/temp -name '*.log' -exec grep -hE '^!|^[^ :]+[.]tex:[0-9]+: ' {} + 2>/dev/null | sed -E 's/[.]tex:[0-9]+:/.tex:/' | sort | uniq -c | sort -rn || true)
+          [ -z "$tex_errors" ] || note warning "$(head -15 <<< "$tex_errors")" "TeX errors in the PDF build ($(awk '{n+=$1} END {print n}' <<< "$tex_errors") in all)"
           pdf=_build/exports/test-lecture-theme-mystmd.pdf
           if [ ! -s "$pdf" ]; then
             note error "no PDF at lectures/$pdf" "PDF export"

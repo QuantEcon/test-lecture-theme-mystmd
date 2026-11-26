@@ -40,7 +40,7 @@ npm install -g /tmp/qe-mystmd/packages/mystmd     # `myst --version` prints v1.1
 cd lectures && myst build --pdf --execute && myst build --html --execute
 ```
 
-The first build makes the book PDF that every page's Downloads menu offers (`project.exports` and `project.downloads` in `myst.yml`), with LaTeX (`xelatex` through `latexmk`) and the `plain_latex_book` template fetched from api.mystmd.org; it runs first because the site links an export only when its file exists. The HTML build then takes the code cells' outputs from the execution cache the first one filled.
+The first build makes the book PDF that every page's Downloads menu offers (`project.exports` and `project.downloads` in `myst.yml`), with LaTeX (`xelatex` through `latexmk`) and the `plain_latex_book` template fetched from api.mystmd.org. The template loads `lmodern`, which the build image lacks, so CI installs Debian's `lmodern` package on top of it; it runs first because the site links an export only when its file exists. The HTML build then takes the code cells' outputs from the execution cache the first one filled.
 
 The code cells execute in the `quantecon` conda environment of the image CI builds in — `ghcr.io/quantecon/quantecon-build`, pinned by digest in `.github/workflows/ci.yml` — the same image the Sphinx corpus uses, so the two corpora run one kernel (theme-parity decision D14). Locally, build inside that image, or create the environment from `containers/quantecon-build/environment.yml` in QuantEcon/actions. Node 24 runs the engine.
 
