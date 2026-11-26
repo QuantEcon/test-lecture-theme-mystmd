@@ -22,7 +22,7 @@
 source:
   repository: QuantEcon/project-theme-parity
   path: bin/site-features.yml
-  commit: 757024df452240f450e5f46abf4836923e6cec6a
+  commit: 15afadb44dee2bc4d7d848ffe0531575d4e6228c
   side: mystmd
 features:
   - id: launch
