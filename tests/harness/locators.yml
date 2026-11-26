@@ -22,7 +22,7 @@
 source:
   repository: QuantEcon/project-theme-parity
   path: bin/site-features.yml
-  commit: f5a7e81587995dae3c1ad7e0f9085044b0b584bd
+  commit: 2452933f33371decb364de3443504b55374a1afc
   side: mystmd
 features:
   - id: launch
@@ -37,14 +37,16 @@ features:
     viewport: desktop
     locator:
       control: 'button[aria-label="Downloads"]'
-      items: '[role="menu"] a'
+      items: '[role="menu"] [role="menuitem"]'
     behaviour: "open the control where it is a menu, and fetch each link"
   - id: download-pdf
     name: "A PDF of the page"
     page: code_cells
     viewport: desktop
-    locator: null
-    behaviour: "activate the control; a print dialog opens"
+    locator:
+      control: 'button[aria-label="Downloads"]'
+      pdf: '[role="menu"] [role="menuitem"]:has-text("PDF")'
+    behaviour: "activate the control; Sphinx's opens a print dialog, mystmd's menu lists the PDF and its file answers 200"
   - id: fullscreen
     name: "Full-screen control"
     page: typography
