@@ -1,6 +1,7 @@
 // The run: every site feature on its page, at its viewport, in both colour schemes; then the page-wide checks on every
-// page at the three viewports, in both schemes, and in the same page loads the families' drawn counts (D18). Each
-// check gets a fresh browser context, so nothing one check writes
+// page at the three viewports, in both schemes, and in the same page loads the families' drawn counts (D18) and the
+// style metrics of every surface they count as shown (D19). Each check gets a fresh browser context, so nothing one
+// check writes
 // (`localStorage`, a cookie, the scroll position) reaches another, and on the live sites, which share the origin
 // quantecon.github.io, nothing one site writes reaches the other's checks.
 //
@@ -10,6 +11,7 @@
 import { chromium } from "@playwright/test";
 import { SCHEMES } from "./csv.mjs";
 import { PAGE_VIEWPORTS, VIEWPORTS, SiteFault, countDrawn, countParts, describeCounts, fetchUrl, load, oneLine, partsOf, withTimeout } from "./util.mjs";
+import { bodyText, fontFile, measureDrawn, metricRow, renderedFonts } from "./visual.mjs";
 
 const HYDRATION = /hydrat|did not match|server rendered HTML|Minified React error #(418|419|421|422|423|425)/i;
 
@@ -47,12 +49,16 @@ function rowsOf(base, checks, result, detail) {
   return checks.map((check) => ({ ...base, check, result, detail }));
 }
 
-/** The page's drawn counts not taken: an empty count for every family, and one `uncounted` entry saying why. */
+/**
+ * The page's drawn counts not taken: an empty count for every family, and one `uncounted` entry saying why. No
+ * metrics rows: a reading not counted is not measured, and provenance's `uncounted` says why for both.
+ */
 function notTaken(drawn, where, why) {
   if (!drawn) return { counts: [], uncounted: [] };
   return {
     counts: drawn.counted.map((f) => ({ ...where, family: f.id, drawn: "", shown: "" })),
     uncounted: [{ ...where, family: null, why }],
+    metrics: [],
   };
 }
 
@@ -120,9 +126,12 @@ async function featureTask(browser, run, f, scheme) {
   }
 }
 
-// The page-wide checks on one page at one reading, then the drawn counts in the same load: { rows, counts, uncounted }.
-// A page that does not load, or whose scheme does not take effect, gives error rows and empty counts; a selector that
-// throws gives that family an empty count and an `uncounted` entry, which makes the run exit 1.
+// The page-wide checks on one page at one reading, then the drawn counts in the same load, and with them, when
+// `run.metrics`, each shown surface's metrics: { rows, counts, uncounted, metrics, faults, fonts }. A page that does
+// not load, or whose scheme does not take effect, gives error rows, empty counts and no metrics; a selector that
+// throws gives that family an empty count, no metrics and an `uncounted` entry, which makes the run exit 1, as does
+// a surface whose measures threw (its row is written, its measures empty, and `faults` names it). `fonts` is what
+// the measured text rendered with and the font files the page loaded, for provenance's fingerprint.
 async function pageTask(browser, run, stem, viewport, scheme) {
   const { theme, site, drawn } = run;
   const base = { page: stem, family: "page", viewport, scheme };
@@ -132,6 +141,8 @@ async function pageTask(browser, run, stem, viewport, scheme) {
   try {
     const page = await ctx.newPage();
     const w = watch(page);
+    const fontFiles = new Set();
+    if (run.metrics) page.on("request", (q) => { if (q.resourceType() === "font") { try { fontFiles.add(fontFile(q.url(), site)); } catch {} } });
     const nav = await load(page, site.url + theme.pagePath(stem));
     if (!nav.ok) {
       const why = `the page did not load: ${nav.detail}`;
@@ -162,18 +173,33 @@ async function pageTask(browser, run, stem, viewport, scheme) {
     } catch (e) {
       rows.push({ ...base, check: "overflow", result: "error", detail: `the widths could not be read: ${oneLine(e.message, 200)}` });
     }
-    // the drawn counts: after settling, the scheme check and the error markers, in this load; one evaluation per family
-    const counts = [], uncounted = [];
+    // the drawn counts: after settling, the scheme check and the error markers, in this load; one evaluation per
+    // family, which with the metrics also measures every surface it counts as shown, so the two always agree
+    const counts = [], uncounted = [], metrics = [], faults = [];
+    let body = null;
+    if (run.metrics && drawn) {
+      try { body = await bodyText(page, theme); } catch (e) { faults.push({ ...where, family: null, n: null, why: `the body text could not be read: ${oneLine(e.message, 200)}` }); }
+    }
     for (const f of drawn?.counted ?? []) {
       try {
-        const c = await countDrawn(page, f.selector);
+        const c = run.metrics ? await measureDrawn(page, f.selector, theme) : await countDrawn(page, f.selector);
         counts.push({ ...where, family: f.id, drawn: c.drawn, shown: c.shown });
+        for (const s of c.surfaces ?? []) {
+          metrics.push(metricRow(where, f.id, s, body));
+          if (s.fault) faults.push({ ...where, family: f.id, n: s.n, why: `the measures threw: ${oneLine(s.fault, 200)}` });
+        }
       } catch (e) {
         counts.push({ ...where, family: f.id, drawn: "", shown: "" });
         uncounted.push({ ...where, family: f.id, why: `the selector threw: ${oneLine(e.message, 200)}` });
       }
     }
-    return { rows, counts, uncounted };
+    // the fonts the measured text rendered with; a failure to read them is recorded, and is no fault of the metrics
+    let fonts = null;
+    if (run.metrics && drawn) {
+      try { fonts = { rendered: [...await renderedFonts(page)], files: [...fontFiles], error: null }; }
+      catch (e) { fonts = { rendered: [], files: [...fontFiles], error: oneLine(e.message, 200) }; }
+    }
+    return { rows, counts, uncounted, metrics, faults, fonts };
   } finally {
     await ctx.close().catch(() => {});
   }
@@ -197,16 +223,18 @@ async function pool(tasks, jobs) {
  * `order` is every page of the site in its order, which the behaviours read (another page, previous and next, the
  * contents); `pages` the pages to give the page-wide checks, by default all of them. `drawn` is the drawn table
  * (table.mjs's readDrawn), or null for no counts; the counts are taken in the page-wide checks' loads, so none are
- * taken without them.
- * Resolves to { rows, counts, uncounted, browserVersion }, the rows in the order: features in the table's order
- * (light, then dark; present, then behaviour), then pages in the site's order (desktop, tablet, phone; light, then
- * dark); the counts in the pages' order, then the families in the drawn table's order; `uncounted` each reading not
- * taken, {page, viewport, scheme, family (null for the whole page), why}.
+ * taken without them. `metrics` (default true) measures every surface the counts find shown; none without counts.
+ * Resolves to { rows, counts, uncounted, metrics, faults, fonts, browserVersion }, the rows in the order: features in
+ * the table's order (light, then dark; present, then behaviour), then pages in the site's order (desktop, tablet,
+ * phone; light, then dark); the counts in the pages' order, then the families in the drawn table's order; `uncounted`
+ * each reading not taken, {page, viewport, scheme, family (null for the whole page), why}; the metrics in the counts'
+ * order, then by `n`; `faults` each surface whose measures threw, {page, viewport, scheme, family, n, why}; `fonts`
+ * every page reading's {rendered, files, error}, or null without metrics.
  */
-export async function runChecks({ theme, table, drawn = null, site, order, pages = order, jobs = 4, only = null, pageChecks = true, onTask = () => {} }) {
+export async function runChecks({ theme, table, drawn = null, site, order, pages = order, jobs = 4, only = null, pageChecks = true, metrics = true, onTask = () => {} }) {
   const browser = await chromium.launch(process.env.HARNESS_CHROMIUM ? { executablePath: process.env.HARNESS_CHROMIUM } : {});
   site = { ...site, pages: order };
-  const run = { theme, site, drawn };
+  const run = { theme, site, drawn, metrics: metrics && !!drawn };
   try {
     const tasks = [];
     for (const f of table.features) {
@@ -223,6 +251,9 @@ export async function runChecks({ theme, table, drawn = null, site, order, pages
       rows: done.flatMap((r) => r.rows),
       counts: done.flatMap((r) => r.counts ?? []),
       uncounted: done.flatMap((r) => r.uncounted ?? []),
+      metrics: done.flatMap((r) => r.metrics ?? []),
+      faults: done.flatMap((r) => r.faults ?? []),
+      fonts: run.metrics ? done.map((r) => r.fonts).filter(Boolean) : null,
       browserVersion: browser.version(),
     };
   } finally {

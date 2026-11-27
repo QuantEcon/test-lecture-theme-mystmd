@@ -6,18 +6,25 @@ const pref = window.matchMedia("(prefers-color-scheme: light)").matches ? "light
 document.documentElement.classList.add(saved ?? pref);</script>
 <style>body{margin:0;font:16px sans-serif} html.dark body{background:#1c1917;color:#ddd} article main{max-width:800px;margin:0 auto}
 article main p{font-size:18px} .qe-collapse--input .qe-collapse__body{max-height:6em;overflow:hidden}
-.qe-collapse--input[data-expanded="true"] .qe-collapse__body{max-height:none} pre{margin:0}</style></head>
+.qe-collapse--input[data-expanded="true"] .qe-collapse__body{max-height:none} pre{margin:0}
+/* the metrics (D19): each measured box pinned in px, so the expected metrics hold whatever the platform's fonts */
+#selftest-sol-1{height:100px;background:rgba(0,0,255,.2)} #selftest-sol-1 .myst-exercise-title{font-size:14px;font-weight:700;color:#555555}
+#selftest-sol-1 .myst-exercise-body p{margin:0;font-size:16px;line-height:24px;color:#333333} .cite-group.parenthetical{display:inline-block;width:200px;height:24px}</style></head>
 <body>
 <div><ul><li><button type="button" class="qe-toc-toggle" aria-label="Table of contents">toc</button></li>
 <li><button aria-label="Change contrast">contrast</button></li></ul></div>
 <article class="article content"><main>
-<p>A paragraph of lecture text, long enough to measure, with <a href="../">a link</a>.</p>
+<!-- the metrics: the body text, a paragraph in one of the theme's prose blocks -->
+<div class="prose-qetext-light"><p>A paragraph of lecture text, long enough to measure, with <a href="../">a link</a>.</p></div>
 <!-- the drawn counts: two citations, one parenthetical; an exercise and its solution, which the solution selector's
      text filter tells apart by their headers -->
 <p>As <span class="cite-group narrative"><cite data-state="closed"><span class="hover-link">Keynes (1940)</span></cite></span> argued, and others since
 <span class="cite-group parenthetical"><cite data-state="closed"><span class="hover-link">Russell, 2004</span></cite></span>.</p>
 <aside id="selftest-ex-1" class="myst-exercise"><div class="myst-exercise-header"><div class="myst-exercise-title"><a href="#selftest-ex-1" title="Link to this Exercise">Exercise<!-- --> <!-- -->1</a></div></div><div class="myst-exercise-body"><p>Show that it holds.</p></div></aside>
-<aside class="myst-exercise"><div class="myst-exercise-header"><div class="myst-exercise-title">Solution to <span data-state="closed"><a href="#selftest-ex-1" class="hover-link">Exercise&nbsp;1</a></span></div></div><div class="myst-exercise-body"><p>It holds.</p></div></aside>
+<!-- the metrics: the solution's title is its first text and its answer its dominant text, on a translucent
+     background composited over the page's (in dark, a pair below 4.5:1); its id is its key. The parenthetical
+     citation has no id, so it has no key, and pairs by n -->
+<aside id="selftest-sol-1" class="myst-exercise"><div class="myst-exercise-header"><div class="myst-exercise-title">Solution to <span data-state="closed"><a href="#selftest-ex-1" class="hover-link">Exercise&nbsp;1</a></span></div></div><div class="myst-exercise-body"><p>It holds, since every term of the series is positive and their sum is finite.</p></div></aside>
 </main></article>
 <script>/* a working toggle: switches the page and keeps the choice */
 document.querySelector('button[aria-label="Change contrast"]').addEventListener("click", function () {

@@ -13,17 +13,26 @@ const pref = window.matchMedia("(prefers-color-scheme: light)").matches ? "light
 document.documentElement.classList.add(saved ?? pref);</script>
 <style>body{margin:0;font:16px sans-serif} html.dark body{background:#1c1917;color:#ddd} article main{max-width:800px;margin:0 auto}
 article main p{font-size:18px} .qe-collapse--input .qe-collapse__body{max-height:6em;overflow:hidden}
-.qe-collapse--input[data-expanded="true"] .qe-collapse__body{max-height:none} pre{margin:0}</style></head>
+.qe-collapse--input[data-expanded="true"] .qe-collapse__body{max-height:none} pre{margin:0}
+/* the metrics (D19): each measured box pinned in px, so the expected metrics hold whatever the platform's fonts */
+.myst-jp-nb-block[id]{height:120px;overflow-x:auto} .myst-jp-nb-block .wide{width:1000px;height:1px}</style></head>
 <body>
 <div><ul><li><button type="button" class="qe-toc-toggle" aria-label="Table of contents">toc</button></li>
 <li><button aria-label="Change contrast">contrast</button></li>
 <li><button aria-label="Downloads">downloads</button></li></ul></div>
 <article class="article content"><main>
-<div aria-label="Book title"><a href="../">Self-test Lectures</a></div><p>A paragraph of lecture text, long enough to measure, with <a href="../">a link</a>.</p><!-- the drawn counts: two cells; the first has the id-less toolbar block and the empty outputs container the theme
+<div aria-label="Book title"><a href="../">Self-test Lectures</a></div><!-- the metrics: the body text, a paragraph in one of the theme's prose blocks -->
+<div class="prose-qetext-light"><p>A paragraph of lecture text, long enough to measure, with <a href="../">a link</a>.</p></div><!-- the drawn counts: two cells; the first has the id-less toolbar block and the empty outputs container the theme
      writes for a cell with no output, which the selectors leave out; the second's output is inside a closed dropdown -->
 <div id="selftest-cell-1" class="myst-jp-nb-block relative group/block"><div class="myst-jp-nb-block sticky top-[115px] z-10 opacity-90"></div><div class="myst-code relative group not-prose overflow-auto"><pre><code class="language-python">import numpy as np
-x = np.linspace(0, 1, 5)</code></pre><button title="Copy to clipboard" aria-label="Copy code to clipboard" class="myst-code-copy-icon">copy</button></div><div data-name="outputs-container" class="max-w-full overflow-y-visible m-0 group not-prose relative text-left"></div></div>
-<div id="selftest-cell-2" class="myst-jp-nb-block relative group/block"><div class="myst-code relative group not-prose overflow-auto"><pre><code class="language-python">print(x.sum())</code></pre></div><details class="myst-dropdown rounded-md my-5"><summary class="myst-dropdown-header m-0"><span class="myst-dropdown-header-title">Output</span></summary><div class="myst-dropdown-body px-4 py-1 details-body"><div data-name="outputs-container" class="max-w-full overflow-y-visible m-0 group not-prose relative text-left mb-5"><div data-name="safe-output-stream"><div><pre aria-label="cell output stream" class="myst-jp-stream-output"><code><span>2.5</span></code></pre></div></div></div></div></details></div><details class="qe-stderr"><summary>Code warnings</summary><div><pre>UserWarning: this goes to stderr</pre></div></details>
+x = np.linspace(0, 1, 5)</code></pre><button title="Copy to clipboard" aria-label="Copy code to clipboard" class="myst-code-copy-icon">copy</button></div><div data-name="outputs-container" class="max-w-full overflow-y-visible m-0 group not-prose relative text-left"></div>
+<!-- the metrics: content wider than the cell, which scrolls it, so the cell overflows and the page does not -->
+<div class="wide"></div></div>
+<div id="selftest-cell-2" class="myst-jp-nb-block relative group/block"><div class="myst-code relative group not-prose overflow-auto"><pre><code class="language-python">print(x.sum())</code></pre></div><details class="myst-dropdown rounded-md my-5"><summary class="myst-dropdown-header m-0"><span class="myst-dropdown-header-title">Output</span></summary><div class="myst-dropdown-body px-4 py-1 details-body"><div data-name="outputs-container" class="max-w-full overflow-y-visible m-0 group not-prose relative text-left mb-5"><div data-name="safe-output-stream"><div><pre aria-label="cell output stream" class="myst-jp-stream-output"><code><span>2.5</span></code></pre></div></div></div></div></details></div>
+<!-- the metrics: a third cell, whose output shows no text (its text measures are empty), and is the second output
+     drawn and the first shown: its n is 2 -->
+<div id="selftest-cell-3" class="myst-jp-nb-block relative group/block"><div class="myst-code relative group not-prose overflow-auto"><pre><code class="language-python">plt.plot(x)</code></pre></div><div data-name="outputs-container" class="max-w-full overflow-y-visible m-0 group not-prose relative text-left"><div style="width:120px;height:60px;background:#888888"></div></div></div>
+<details class="qe-stderr"><summary>Code warnings</summary><div><pre>UserWarning: this goes to stderr</pre></div></details>
 </main></article>
 <script>/* a working copy button: the block's code to the clipboard */
 document.querySelector(".myst-code-copy-icon").addEventListener("click", function () {

@@ -2,12 +2,13 @@
 # tests/harness/, against the site this run built, served under the path it was built for. ci.yml (and, in the
 # Sphinx corpus, publish.yml) calls it after the build job, with the artefact that holds the built site.
 #
-# A failed check is a row of rendered.csv, and a drawn count (D18) a row of counts.csv, not a red job. This job fails
-# only when the harness itself does: the self-test reads its fixtures wrongly, the site cannot be served, the locator
-# or drawn table does not parse, a check could not run (an `error` row; the rows are still written), or a drawn
-# selector threw (its count is written empty). Its rows and counts (_harness/) are uploaded as this run's `harness`
-# artefact either way, and the deploy job puts them on the site, under /_harness/, only when this job succeeded.
-# The rendered checks' step summary and a notice on the run say what counts.csv holds.
+# A failed check is a row of rendered.csv, a drawn count (D18) a row of counts.csv, and a surface's style metrics
+# (D19) a row of metrics.csv, not a red job. This job fails only when the harness itself does: the self-test reads its
+# fixtures wrongly, the site cannot be served, the locator or drawn table does not parse, a check could not run (an
+# `error` row; the rows are still written), a drawn selector threw (its count is written empty), or a surface's
+# measures threw (its row is written with them empty). Its rows, counts and metrics (_harness/) are uploaded as this
+# run's `harness` artefact either way, and the deploy job puts them on the site, under /_harness/, only when this job
+# succeeded. The rendered checks' step summary and two notices on the run say what counts.csv and metrics.csv hold.
 #
 # The same file in QuantEcon/test-lecture-theme-sphinx and QuantEcon/test-lecture-theme-mystmd.
 name: Rendered checks
@@ -27,8 +28,11 @@ jobs:
   rendered:
     name: Rendered checks (Playwright)
     # Outside the build image, which may lack Playwright's browser and its system libraries: the theme's DOM does not
-    # depend on where the checks run, and the build it reads was made in the image
-    runs-on: ubuntu-latest
+    # depend on where the checks run, and the build it reads was made in the image. The label is pinned, not
+    # ubuntu-latest, so a new default image is a deliberate edit here, in both corpora, and never a silent change
+    # between passes (QuantEcon/project-theme-parity#80, decision 5); provenance.json records the image each run had,
+    # and the fonts the measured text rendered with, since font packages can still move within one label
+    runs-on: ubuntu-26.04
     timeout-minutes: 45
     permissions:
       contents: read

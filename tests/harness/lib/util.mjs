@@ -59,19 +59,41 @@ export async function settleBase(page) {
   await stableDom(page);
 }
 
-// Visible as Playwright means it: a non-empty bounding box and no `visibility: hidden`. [matched, visible]. With a
-// text filter (a drawn selector's {in, text}), only the elements whose own text, or the text of their first `in`
-// descendant, whitespace collapsed and trimmed, matches the regular expression `text` (the `u` flag) are counted.
-const COUNT = (els, filter) => {
-  if (filter?.text != null) {
-    const re = new RegExp(filter.text, "u");
-    els = els.filter((e) => { const t = filter.in ? e.querySelector(filter.in) : e; return !!t && re.test((t.textContent ?? "").replace(/\s+/g, " ").trim()); });
-  }
-  return [
-    els.length,
-    els.filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && (e.checkVisibility ? e.checkVisibility({ visibilityProperty: true }) : getComputedStyle(e).visibility !== "hidden"); }).length,
-  ];
-};
+// The in-page helpers below run in the browser. Each is written once and declared inside every evaluation that needs
+// it (inPage), so the drawn counts and the metrics (visual.mjs) read "shown" and a text filter in exactly one way.
+
+/** Visible as Playwright means it: a non-empty bounding box and no `visibility: hidden`. Runs in the page. */
+export function harnessShown(e) {
+  const r = e.getBoundingClientRect();
+  return r.width > 0 && r.height > 0 && (e.checkVisibility ? e.checkVisibility({ visibilityProperty: true }) : getComputedStyle(e).visibility !== "hidden");
+}
+
+/**
+ * With a text filter (a drawn selector's {in, text}), only the elements whose own text, or the text of their first
+ * `in` descendant, whitespace collapsed and trimmed, matches the regular expression `text` (the `u` flag); without
+ * one, every element. Runs in the page.
+ */
+export function harnessFiltered(els, filter) {
+  if (filter?.text == null) return els;
+  const re = new RegExp(filter.text, "u");
+  return els.filter((e) => { const t = filter.in ? e.querySelector(filter.in) : e; return !!t && re.test((t.textContent ?? "").replace(/\s+/g, " ").trim()); });
+}
+
+/**
+ * A function for page.evaluate or locator.evaluateAll: `main` (a function expression), called with the evaluation's
+ * arguments, with each of `helpers` declared beside it in the page: a named function (or method), or the source of a
+ * declaration.
+ */
+export function inPage(main, ...helpers) {
+  const declared = (h) => { const s = String(h).trim(); return typeof h === "string" || /^(async\s+)?function\b/.test(s) ? s : `function ${s}`; };
+  return new Function("...args", `${helpers.map(declared).join("\n")}\nreturn (${String(main)})(...args);`);
+}
+
+// [matched, visible]: how many elements the selector matches, after the text filter, and how many of those are shown
+const COUNT = inPage((els, filter) => {
+  const kept = harnessFiltered(els, filter);
+  return [kept.length, kept.filter(harnessShown).length];
+}, harnessShown, harnessFiltered);
 
 /** The locator's parts: a string is one unnamed part, a mapping is named parts, null is no locator. */
 export function partsOf(locator) {

@@ -22,12 +22,54 @@ function stemOf(href, base, site) {
   return (path.split("/").pop() ?? "").replace(/\.html$/, "").replace(/-/g, "_");
 }
 
+// The content root, `article.article`: the lecture text, the drawn selectors' scope, and the metrics' (D19). The
+// body text: a paragraph directly in one of the theme's prose blocks (`div.prose-qetext-light`, a block of the
+// page's running text; a box's paragraphs sit in its own body, the footer's in `qe-site-footer`, the outline's in
+// `nav.qe-outline`). `para` takes every paragraph of the text, boxed ones too, so it serves the behaviours that
+// press on the text, and `body` is the metrics' reference for size and column, and dark-palette's text.
 const profile = {
   text: "article.article", // the lecture text
   para: "article.article main p:not(.qe-outline *)", // not the outline's "Powered by MyST Markdown"
+  body: ".prose-qetext-light > p", // inside `text`
   stemOf,
   maths: { all: ".katex", menu: null },
 };
+
+/**
+ * Where a surface's pairing key sits on this theme (lib/visual.mjs normalises and hashes it; decision 3 of
+ * QuantEcon/project-theme-parity#80). Runs in the page, on a shown surface, with the content root. Each is there only
+ * where the surface has it: `tex`, a display maths element's TeX, from the annotation KaTeX writes into its MathML;
+ * `code`, the input of the cell the surface is or lies in (its code block, not one in its outputs), or that a
+ * dropdown folding a whole cell holds (hide-cell), or of the code block it is or lies in; `heading`, a heading's text
+ * without its number or permalink (the theme's `.heading-text` where it writes one; a page title's number, "2. ", is
+ * plain text before it); `label`, the nearest id at or above the surface that the build did not generate (mystmd's
+ * ten-character keys, `rucnplfZ7R`, and React's `:R55anop:`, name no label).
+ */
+function sourceOf(e, root) {
+  const out = {};
+  if (e.matches(".katex-display, .katex")) {
+    const a = e.querySelector('annotation[encoding="application/x-tex"]');
+    if (a) out.tex = a.textContent;
+  }
+  const cell = e.closest(".myst-jp-nb-block[id]") ?? (e.matches("details.myst-dropdown") ? e.querySelector(":scope > .myst-dropdown-body > .myst-jp-nb-block") : null);
+  const code = cell ? [...cell.querySelectorAll(".myst-code code")].find((c) => !c.closest('[data-name="outputs-container"]'))
+    : e.closest(".myst-code")?.querySelector("code");
+  if (code) out.code = code.textContent;
+  if (/^H[1-6]$/.test(e.tagName)) {
+    const text = e.querySelector(".heading-text");
+    if (text) out.heading = text.textContent;
+    else {
+      const h = e.cloneNode(true);
+      for (const x of h.querySelectorAll(".select-none, a[aria-label]")) x.remove();
+      out.heading = h.textContent.replace(/^\s*\d+(?:\.\d+)*\.\s+/, "");
+    }
+  }
+  const generated = (id) => /^(?=.*[A-Z])[A-Za-z0-9]{10}$/.test(id) || /^(radix-)?:[^:]+:$/.test(id);
+  for (let x = e; x && x !== root; x = x.parentElement) {
+    if (x.id && !generated(x.id)) { out.label = x.id; break; }
+  }
+  return out;
+}
 
 
 /** Open a Radix menu by its trigger and read its items: each one's label, and its link (its own or one inside it), or
@@ -368,6 +410,10 @@ if (process.env.GITHUB_ACTIONS === "true" && resolve(process.argv[1] ?? "") === 
 
 export default {
   side: "mystmd",
+  // the metrics' theme facts (D19): the content root, the body text inside it, and where a surface's key sits
+  content: profile.text,
+  bodyText: profile.body,
+  sourceOf,
   repository: "QuantEcon/test-lecture-theme-mystmd",
   basePath: "/test-lecture-theme-mystmd/",
   publishedBase: "https://quantecon.github.io/test-lecture-theme-mystmd/",
