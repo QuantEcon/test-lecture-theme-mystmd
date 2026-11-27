@@ -8,23 +8,34 @@ document.documentElement.classList.add(saved ?? pref);</script>
 article main p{font-size:18px} .qe-collapse--input .qe-collapse__body{max-height:6em;overflow:hidden}
 .qe-collapse--input[data-expanded="true"] .qe-collapse__body{max-height:none} pre{margin:0}
 /* the metrics (D19): each measured box pinned in px, so the expected metrics hold whatever the platform's fonts */
-#selftest-sol-1{height:100px;background:rgba(0,0,255,.2)} #selftest-sol-1 .myst-exercise-title{font-size:14px;font-weight:700;color:#555555}
-#selftest-sol-1 .myst-exercise-body p{margin:0;font-size:16px;line-height:24px;color:#333333} .cite-group.parenthetical{display:inline-block;width:200px;height:24px}</style></head>
+.prose-qetext-light p.narrow{margin-right:200px}
+article main h1{margin:0;height:40px;font-size:32px;line-height:40px} h2{margin:0;height:32px;font-size:24px;line-height:32px;color:rgba(0,0,0,.6)}
+.select-none{color:#888888} h2 a[aria-label]{color:#999999} h2 code{font:20px monospace}
+#selftest-sol-1{height:120px;background:rgba(0,0,255,.2)} #selftest-sol-1 .myst-exercise-title{font-size:14px;font-weight:700;color:#555555}
+#selftest-sol-1 .myst-exercise-body p{margin:0;font-size:15px;line-height:24px;color:#333333} .cite-group.parenthetical{display:inline-block;width:200px;height:24px}</style></head>
 <body>
 <div><ul><li><button type="button" class="qe-toc-toggle" aria-label="Table of contents">toc</button></li>
 <li><button aria-label="Change contrast">contrast</button></li></ul></div>
 <article class="article content"><main>
-<!-- the metrics: the body text, a paragraph in one of the theme's prose blocks -->
-<div class="prose-qetext-light"><p>A paragraph of lecture text, long enough to measure, with <a href="../">a link</a>.</p></div>
-<!-- the drawn counts: two citations, one parenthetical; an exercise and its solution, which the solution selector's
-     text filter tells apart by their headers -->
-<p>As <span class="cite-group narrative"><cite data-state="closed"><span class="hover-link">Keynes (1940)</span></cite></span> argued, and others since
-<span class="cite-group parenthetical"><cite data-state="closed"><span class="hover-link">Russell, 2004</span></cite></span>.</p>
+<!-- the metrics: the page's title, its number written as plain text before it, and a section heading, each keyed by
+     its text without its number or permalink. The section heading's own text and its code are drawn in two styles with
+     five characters each: the first in document order is its dominant text, in a translucent colour composited over
+     the page's -->
+<h1 class="pt-12 m-0">2<!-- -->. <!-- -->Typography</h1>
+<!-- the metrics: the body text, a paragraph in one of the theme's prose blocks, and a second, set narrower: the body
+     text is the first -->
+<div class="prose-qetext-light"><p>A paragraph of lecture text, long enough to measure, with <a href="../">a link</a>.</p>
+<p class="narrow">A second paragraph of lecture text, set narrower than the first.</p></div>
+<h2 id="lists" class="relative group"><span class="mr-3 select-none">2.1</span><span class="heading-text">Lists <code>ab12c</code></span><a class="no-underline select-none" href="#lists" title="Link to this Section" aria-label="Link to this Section">¶</a></h2>
+<!-- the drawn counts: two citations, one parenthetical (in the solution below); an exercise and its solution, which the
+     solution selector's text filter tells apart by their headers -->
+<p>As <span class="cite-group narrative"><cite data-state="closed"><span class="hover-link">Keynes (1940)</span></cite></span> argued.</p>
 <aside id="selftest-ex-1" class="myst-exercise"><div class="myst-exercise-header"><div class="myst-exercise-title"><a href="#selftest-ex-1" title="Link to this Exercise">Exercise<!-- --> <!-- -->1</a></div></div><div class="myst-exercise-body"><p>Show that it holds.</p></div></aside>
-<!-- the metrics: the solution's title is its first text and its answer its dominant text, on a translucent
-     background composited over the page's (in dark, a pair below 4.5:1); its id is its key. The parenthetical
-     citation has no id, so it has no key, and pairs by n -->
-<aside id="selftest-sol-1" class="myst-exercise"><div class="myst-exercise-header"><div class="myst-exercise-title">Solution to <span data-state="closed"><a href="#selftest-ex-1" class="hover-link">Exercise&nbsp;1</a></span></div></div><div class="myst-exercise-body"><p>It holds, since every term of the series is positive and their sum is finite.</p></div></aside>
+<!-- the metrics: the solution's title is its first text and its answer its dominant text, set smaller than the box, on a
+     translucent background composited over the page's (in dark, a pair below 4.5:1). Its id is its label, as the
+     page's source writes it (selftest/labels.yml), so it is its key. The citation inside it has no id, so it has no
+     key and pairs by n, and takes none from the box it sits in -->
+<aside id="selftest-sol-1" class="myst-exercise"><div class="myst-exercise-header"><div class="myst-exercise-title">Solution to <span data-state="closed"><a href="#selftest-ex-1" class="hover-link">Exercise&nbsp;1</a></span></div></div><div class="myst-exercise-body"><p>It holds, since every term of the series is positive and their sum is finite, as <span class="cite-group parenthetical"><cite data-state="closed"><span class="hover-link">Russell, 2004</span></cite></span> shows.</p></div></aside>
 </main></article>
 <script>/* a working toggle: switches the page and keeps the choice */
 document.querySelector('button[aria-label="Change contrast"]').addEventListener("click", function () {

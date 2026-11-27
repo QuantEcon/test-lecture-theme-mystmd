@@ -7,15 +7,17 @@
 // It writes `rendered.csv`, `counts.csv`, `metrics.csv` and `provenance.json` into --out (default `_harness/` at the
 // repository root) and prints a summary. Exit 0: every check ran, and every count and measure was taken (failed
 // checks are rows, and counts and metrics are data, never a failed run). Exit 1: a check could not run (an `error`
-// row: it threw, a page did not load, or a colour scheme did not take effect), a drawn selector threw, or a surface's
-// measures threw; the CSVs are still written. Exit 2: nothing was checked (a bad argument, a locator or drawn table
-// that does not parse, a site that cannot be served).
+// row: it threw, a page did not load, or a colour scheme did not take effect), a drawn selector threw, or the metrics
+// had a problem: a surface's measures threw, a surface's key source threw, a page's body text could not be read, or
+// the metrics do not tie to the counts; the CSVs are still written. Exit 2: nothing was checked (a bad argument, a
+// locator or drawn table that does not parse, a site that cannot be served).
 //
 // Options: --out DIR, --jobs N (default 4), --table FILE (default locators.yml), --drawn FILE (default drawn.yml),
 // --no-drawn (no counts, and so no metrics: no counts.csv or metrics.csv), --no-metrics (the counts without the
-// metrics: no metrics.csv), --only id,id (those features only), --pages stem,stem (the page-wide checks, and so the
-// counts and metrics, on those pages only; the behaviours still read the whole site's order), --no-pages (no
-// page-wide checks, and so no counts or metrics), --quiet.
+// metrics: no metrics.csv), --labels FILE (the pages' labels for the key, {page: [label, …]} in YAML, in place of
+// those read from lectures/<page>.md), --only id,id (those features only), --pages stem,stem (the page-wide checks,
+// and so the counts and metrics, on those pages only; the behaviours still read the whole site's order), --no-pages
+// (no page-wide checks, and so no counts or metrics), --quiet.
 // HARNESS_CHROMIUM=<path> runs another Chromium build than the one Playwright installed.
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { readFileSync } from "node:fs";
@@ -25,9 +27,10 @@ import { release } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
-import { toCsv, toCountsCsv, toMetricsCsv, countKeyOf, CHECKS, RESULTS, SCHEMES } from "./lib/csv.mjs";
+import { toCsv, toCountsCsv, toMetricsCsv, CHECKS, RESULTS, SCHEMES } from "./lib/csv.mjs";
 import { runChecks } from "./lib/engine.mjs";
-import { KEY_KINDS, KEY_RULES, fingerprint } from "./lib/visual.mjs";
+import { KEY_KINDS, KEY_RULES, fingerprint, sourceLabels, tieOf } from "./lib/visual.mjs";
+import YAML from "yaml";
 import { readDrawn, readTable } from "./lib/table.mjs";
 import { normaliseBase, serve } from "./lib/server.mjs";
 import { VIEWPORTS, PAGE_VIEWPORTS } from "./lib/util.mjs";
@@ -50,6 +53,7 @@ function parseArgs(argv) {
     else if (a === "--drawn") o.drawn = resolve(val());
     else if (a === "--no-drawn") o.noDrawn = true;
     else if (a === "--no-metrics") o.noMetrics = true;
+    else if (a === "--labels") o.labels = resolve(val());
     else if (a === "--only") o.only = new Set(val().split(",").filter(Boolean));
     else if (a === "--pages") o.pages = val().split(",").filter(Boolean);
     else if (a === "--no-pages") o.pageChecks = false;
@@ -120,6 +124,13 @@ async function main() {
   const unknownPages = (o.pages ?? []).filter((p) => !order.includes(p));
   if (unknownPages.length) { console.error(`run.mjs: --pages names pages this site does not have: ${unknownPages.join(", ")}`); return 2; }
   const pages = o.pages ?? order;
+  // the labels a key may take: each page's source labels, or the file --labels gives
+  let labels, labelsFrom;
+  try {
+    if (o.labels) { labels = YAML.parse(await readFile(o.labels, "utf8")) ?? {}; labelsFrom = relative(REPO, o.labels); }
+    else { labels = await sourceLabels(join(REPO, "lectures"), order); labelsFrom = "lectures/<page>.md"; }
+    if (typeof labels !== "object" || Object.values(labels).some((v) => !Array.isArray(v))) throw new Error("not a mapping of pages to lists of labels");
+  } catch (e) { console.error(`run.mjs: the labels could not be read: ${e.message}`); return 2; }
 
   let site, server = null;
   if (o.dir) {
@@ -147,7 +158,7 @@ async function main() {
   const started = new Date();
   let done = 0;
   const { rows, counts, uncounted, metrics, faults, fonts, browserVersion } = await runChecks({
-    theme, table, drawn: counting ? drawn : null, site, order, pages, jobs: o.jobs, only: o.only, pageChecks: o.pageChecks, metrics: measuring,
+    theme, table, drawn: counting ? drawn : null, site, order, pages, jobs: o.jobs, only: o.only, pageChecks: o.pageChecks, metrics: measuring, labels,
     onTask: (what, r) => { done++; if (!o.quiet) console.error(`[${done}] ${what}: ${r.map((x) => `${x.check} ${x.result}`).join(", ")}`); },
   });
   const buildInfo = await buildInfoCommit(site.url + theme.pagePath(theme.buildInfoPage));
@@ -158,6 +169,9 @@ async function main() {
   // the metrics against the counts: every reading's rows number its `shown`, or the metrics are not to be trusted
   const tie = measuring ? tieOf(counts, metrics) : null;
   const rendered = new Set((fonts ?? []).flatMap((f) => f.rendered)), files = new Set((fonts ?? []).flatMap((f) => f.files));
+  const frameFiles = new Set((fonts ?? []).flatMap((f) => f.frames));
+  const engines = (k) => [...new Set((fonts ?? []).map((f) => f.engines?.[k]).filter(Boolean))].sort();
+  const installed = measuring ? installedFonts() : null;
   const provenance = {
     schema: 3,
     repository: process.env.GITHUB_REPOSITORY ?? theme.repository,
@@ -195,11 +209,14 @@ async function main() {
       file: "metrics.csv",
       content: theme.content,
       body_text: theme.bodyText,
+      glyphs: theme.glyphs ?? null,
       key: KEY_RULES,
+      labels: { from: labelsFrom, pages: Object.keys(labels).length, labels: Object.values(labels).reduce((n, l) => n + l.length, 0) },
       rows: metrics.length,
       readings: { taken: tie.readings, of: pages.length * PAGE_VIEWPORTS.length * SCHEMES.length },
       tied_to_counts: tie.ok,
       empty: emptyOf(metrics),
+      fault_counts: faultCounts(faults),
       faults,
       crops: null,
     } : null,
@@ -213,13 +230,16 @@ async function main() {
       os_release: osRelease(),
       platform: `${process.platform} ${release()} ${process.arch}`,
       browser: { name: "chromium", build: browserVersion, playwright, executable: process.env.HARNESS_CHROMIUM ? "HARNESS_CHROMIUM" : "the build @playwright/test installed" },
+      // the fingerprint is the run's union, so a run on fewer pages (--pages) has its own
       fonts: measuring ? {
-        fingerprint: fingerprint(rendered, files),
+        fingerprint: fingerprint(rendered, files, installed?.lines ?? []),
         rendered: [...rendered].sort(),
         files: [...files].sort(),
+        frame_files: [...frameFiles].sort(),
         unread: fonts.filter((f) => f.error).length,
-        installed: installedFonts(),
+        installed: installed && { command: installed.command, count: installed.lines.length, sha256: installed.sha256 },
       } : null,
+      maths: measuring ? { mathjax: engines("mathjax"), katex: engines("katex") } : null,
     },
     pages: order,
     ...(o.pages ? { page_checks_on: pages } : {}),
@@ -267,28 +287,17 @@ async function main() {
   if (process.env.GITHUB_ACTIONS === "true") console.log(`::notice title=Drawn counts::${escape(countLines.join("\n").slice(0, 4000))}`);
   // the metrics, likewise
   if (process.env.GITHUB_ACTIONS === "true") console.log(`::notice title=Style metrics::${escape(metricLines.join("\n").slice(0, 4000))}`);
+  // the metrics' problems, as a warning on the run, whether or not the exit status below fails the job for them
+  const problems = measuring ? faults.length + (tie.ok ? 0 : tie.off.length) : 0;
+  if (process.env.GITHUB_ACTIONS === "true" && problems) console.log(`::warning title=Style metrics problems::${escape([`${problems} problem(s) with the metrics:`, ...(tie.ok ? [] : [`${tie.off.length} reading(s) do not tie to counts.csv: ${tie.off.slice(0, 12).join("; ")}`]), ...faults.slice(0, 20).map((x) => `${x.kind}: ${x.page} ${x.family ?? ""} ${x.viewport} ${x.scheme}${x.n ? ` n ${x.n}` : ""}: ${x.why}`)].join("\n").slice(0, 4000))}`);
   return errors.length || threw.length || faults?.length || (tie && !tie.ok) ? 1 : 0;
 }
 
-/**
- * Do the metrics tie to the counts? { ok, readings, surfaces, off }: every reading whose count was taken must have as
- * many metrics rows as its `shown`, and a reading not counted none; `readings` the page readings that were counted,
- * `surfaces` the sum of `shown`, `off` the readings that do not tie.
- */
-function tieOf(counts, metrics) {
-  const rows = new Map();
-  for (const m of metrics) rows.set(countKeyOf(m), (rows.get(countKeyOf(m)) ?? 0) + 1);
-  const off = [], taken = new Set();
-  let surfaces = 0;
-  for (const c of counts) {
-    const want = c.shown === "" ? 0 : c.shown;
-    if (c.shown !== "") { surfaces += c.shown; taken.add(`${c.page}|${c.viewport}|${c.scheme}`); }
-    const got = rows.get(countKeyOf(c)) ?? 0;
-    rows.delete(countKeyOf(c));
-    if (got !== want) off.push(`${countKeyOf(c)}: ${got} rows, shown ${c.shown === "" ? "empty" : c.shown}`);
-  }
-  for (const [k, n] of rows) off.push(`${k}: ${n} rows, and no count`);
-  return { ok: !off.length, readings: taken.size, surfaces, off };
+/** How many metrics problems of each kind. */
+function faultCounts(faults) {
+  const out = { measures: 0, key: 0, "body text": 0 };
+  for (const f of faults) out[f.kind] = (out[f.kind] ?? 0) + 1;
+  return out;
 }
 
 /** How many rows have each measure empty: no key (pairing by `n`), no visible text, an inline box, no body text. */
@@ -317,8 +326,9 @@ function metricsSummary(metrics, tie, faults, provenance, drawn) {
       + (tie.ok ? `every reading's rows number its shown in counts.csv (${tie.surfaces} surfaces).` : `${tie.off.length} reading(s) do not tie to counts.csv's shown: ${tie.off.slice(0, 6).join("; ")}${tie.off.length > 6 ? "; …" : ""}`),
     `Keys: ${kinds.join(", ")}; none, so paired by n: ${e.key}.`,
     `Empty values: text ${e.text} (no visible text), overflow ${e.overflow} (an inline box), body text ${e.body_text}${noBody.length ? ` (${noBody.slice(0, 6).join("; ")}${noBody.length > 6 ? "; …" : ""})` : ""}, every measure ${e.measures}.`,
-    faults.length ? `${faults.length} surface(s) whose measures threw: ${faults.slice(0, 6).map((x) => `${x.page} ${x.family ?? "(body text)"} ${x.viewport} ${x.scheme}${x.n ? ` n ${x.n}` : ""}: ${x.why}`).join("; ")}` : "Every surface was measured.",
-    `Environment: ${env.runner.image_os ?? "no runner image"} ${env.runner.image_version ?? ""}`.trimEnd() + `${env.os_release ? `, ${env.os_release}` : ""}, chromium ${env.browser.build}; fonts ${f.fingerprint.slice(0, 12)} (${f.rendered.length} rendered, ${f.files.length} font files${f.unread ? `, ${f.unread} reading(s) unread` : ""}${f.installed ? `; installed ${f.installed.sha256.slice(0, 12)}, ${f.installed.count}` : ""}).`,
+    faults.length ? `Metrics problems: ${faults.length} (${Object.entries(faultCounts(faults)).map(([k, n]) => `${k} ${n}`).join(", ")}): ${faults.slice(0, 6).map((x) => `${x.page} ${x.family ?? "(body text)"} ${x.viewport} ${x.scheme}${x.n ? ` n ${x.n}` : ""}: ${x.why}`).join("; ")}${faults.length > 6 ? "; …" : ""}` : "Metrics problems: none (every surface measured and keyed, every body text read).",
+    `Environment: ${env.runner.image_os ?? "no runner image"} ${env.runner.image_version ?? ""}`.trimEnd() + `${env.os_release ? `, ${env.os_release}` : ""}, chromium ${env.browser.build}${env.maths.mathjax.length ? `, MathJax ${env.maths.mathjax.join(", ")}` : ""}${env.maths.katex.length ? `, KaTeX ${env.maths.katex.join(", ")}` : ""}; fonts ${f.fingerprint.slice(0, 12)} (${f.rendered.length} rendered, ${f.files.length} font files in the main frames${f.frame_files.length ? `, ${f.frame_files.length} in frames, not fingerprinted` : ""}${f.unread ? `, ${f.unread} reading(s) unread` : ""}${f.installed ? `; installed ${f.installed.count}, ${f.installed.sha256.slice(0, 12)}` : "; no fc-list"}).`,
+    `Web fonts rendered: ${[...new Set(f.rendered.filter((x) => x.endsWith(", web")).map((x) => x.replace(/ \(.*$/, "")))].join(", ") || "none"}.`,
   ];
 }
 
@@ -327,11 +337,15 @@ function osRelease() {
   try { return /^PRETTY_NAME="?([^"\n]*)"?$/m.exec(readFileSync("/etc/os-release", "utf8"))?.[1] ?? null; } catch { return null; }
 }
 
-/** The fonts installed for Chromium to fall back on: fontconfig's list (family and style), counted and hashed; null without fc-list. */
+/**
+ * The fonts installed for Chromium to fall back on: fontconfig's list, each font's family, style, version and file,
+ * so a new version of a font shows; null without fc-list. Its lines go into the fingerprint.
+ */
 function installedFonts() {
   try {
-    const lines = [...new Set(execFileSync("fc-list", [":", "family", "style"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).split("\n").map((l) => l.trim()).filter(Boolean))].sort();
-    return { command: "fc-list : family style", count: lines.length, sha256: createHash("sha256").update(lines.join("\n"), "utf8").digest("hex") };
+    const out = execFileSync("fc-list", [":", "family", "style", "fontversion", "file"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], maxBuffer: 64 << 20 });
+    const lines = [...new Set(out.split("\n").map((l) => l.trim()).filter(Boolean))].sort();
+    return { command: "fc-list : family style fontversion file", lines, sha256: createHash("sha256").update(lines.join("\n"), "utf8").digest("hex") };
   } catch { return null; }
 }
 

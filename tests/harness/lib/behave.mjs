@@ -228,7 +228,8 @@ export async function visibleText(handle) {
 
 // The page's, a paragraph's and a link's colours, as `#rrggbb`: the surface's background, and the text's and the
 // link's colours over theirs, by the metrics' one colour routine (visual.mjs's harnessPaint: translucent backgrounds
-// composited), so this row and metrics.csv never read a colour two ways.
+// composited), so this row and metrics.csv never read a colour two ways. The elements are the ones dark-palette has
+// always read (the first paragraph and the first link in one), so only the compositing and the format are new.
 const COLOURS = inPage(({ surface, text, link }) => {
   const kit = harnessPaint();
   const pick = (sel) => document.querySelector(sel);
@@ -335,7 +336,7 @@ export function commonBehaviours(p) {
     "dark-mode": (c) => darkModeFlow(c, { toggle: "toggle", dark: c.selector("dark") }),
 
     async "dark-palette"(c) {
-      const col = await colours(c.page, { surface: p.text, text: `${p.text} ${p.body}`, link: `${p.text} ${p.body} a` });
+      const col = await colours(c.page, { surface: p.text, text: p.para, link: `${p.para} a` });
       const seen = `page ${col.page}, text ${col.text}, link ${col.link}`;
       if (c.scheme === "light") return skip(`the feature is the dark scheme's: its locator, the dark marker, is absent in light by design. The light colours, for the visual layer's before and after: ${seen}`);
       return skip(`dark: ${seen}. No palette is expected until QuantEcon/quantecon-theme.mystmd#237 decides one; a person compares the two schemes in the visual layer`);

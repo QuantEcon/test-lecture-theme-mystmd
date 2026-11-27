@@ -25,8 +25,8 @@ function stemOf(href, base, site) {
 // The content root, `article.article`: the lecture text, the drawn selectors' scope, and the metrics' (D19). The
 // body text: a paragraph directly in one of the theme's prose blocks (`div.prose-qetext-light`, a block of the
 // page's running text; a box's paragraphs sit in its own body, the footer's in `qe-site-footer`, the outline's in
-// `nav.qe-outline`). `para` takes every paragraph of the text, boxed ones too, so it serves the behaviours that
-// press on the text, and `body` is the metrics' reference for size and column, and dark-palette's text.
+// `nav.qe-outline`). `para` takes every paragraph of the text, boxed ones too, so it serves the behaviours that read
+// the text (font-size, dark-palette), and `body` is the metrics' reference for size and column.
 const profile = {
   text: "article.article", // the lecture text
   para: "article.article main p:not(.qe-outline *)", // not the outline's "Powered by MyST Markdown"
@@ -40,10 +40,13 @@ const profile = {
  * QuantEcon/project-theme-parity#80). Runs in the page, on a shown surface, with the content root. Each is there only
  * where the surface has it: `tex`, a display maths element's TeX, from the annotation KaTeX writes into its MathML;
  * `code`, the input of the cell the surface is or lies in (its code block, not one in its outputs), or that a
- * dropdown folding a whole cell holds (hide-cell), or of the code block it is or lies in; `heading`, a heading's text
- * without its number or permalink (the theme's `.heading-text` where it writes one; a page title's number, "2. ", is
- * plain text before it); `label`, the nearest id at or above the surface that the build did not generate (mystmd's
- * ten-character keys, `rucnplfZ7R`, and React's `:R55anop:`, name no label).
+ * dropdown folding a whole cell holds (hide-cell), or of the code block it is or lies in, without the line numbers
+ * the highlighter writes into it; `heading`, a heading's text without its number or permalink (the theme's
+ * `.heading-text` where it writes one; a page title's number, "2. ", is plain text before it), or the book's title
+ * where the first page has no title of its own; `label`, the id at the surface's own label site, the surface itself
+ * or, for a display, the block mystmd puts its label on (two levels up), with the `fn-` mystmd puts before a
+ * footnote's label dropped. The engine keeps a label only where the page's source has it, so mystmd's generated ids
+ * (ten-character keys such as `rucnplfZ7R`, React's `:R55anop:`) never become keys.
  */
 function sourceOf(e, root) {
   const out = {};
@@ -54,7 +57,11 @@ function sourceOf(e, root) {
   const cell = e.closest(".myst-jp-nb-block[id]") ?? (e.matches("details.myst-dropdown") ? e.querySelector(":scope > .myst-dropdown-body > .myst-jp-nb-block") : null);
   const code = cell ? [...cell.querySelectorAll(".myst-code code")].find((c) => !c.closest('[data-name="outputs-container"]'))
     : e.closest(".myst-code")?.querySelector("code");
-  if (code) out.code = code.textContent;
+  if (code) {
+    const c = code.cloneNode(true);
+    for (const x of c.querySelectorAll(".react-syntax-highlighter-line-number, .linenumber")) x.remove();
+    out.code = c.textContent;
+  }
   if (/^H[1-6]$/.test(e.tagName)) {
     const text = e.querySelector(".heading-text");
     if (text) out.heading = text.textContent;
@@ -63,14 +70,11 @@ function sourceOf(e, root) {
       for (const x of h.querySelectorAll(".select-none, a[aria-label]")) x.remove();
       out.heading = h.textContent.replace(/^\s*\d+(?:\.\d+)*\.\s+/, "");
     }
-  }
-  const generated = (id) => /^(?=.*[A-Z])[A-Za-z0-9]{10}$/.test(id) || /^(radix-)?:[^:]+:$/.test(id);
-  for (let x = e; x && x !== root; x = x.parentElement) {
-    if (x.id && !generated(x.id)) { out.label = x.id; break; }
-  }
+  } else if (e.matches('[aria-label="Book title"]')) out.heading = e.textContent;
+  const site = e.matches(".katex-display") ? e.parentElement?.parentElement : e;
+  if (site?.id) out.label = e.matches(".myst-footnotes-item") ? site.id.replace(/^fn-/, "") : site.id;
   return out;
 }
-
 
 /** Open a Radix menu by its trigger and read its items: each one's label, and its link (its own or one inside it), or
  * null; Escape closes it again. */
@@ -413,6 +417,9 @@ export default {
   // the metrics' theme facts (D19): the content root, the body text inside it, and where a surface's key sits
   content: profile.text,
   bodyText: profile.body,
+  // KaTeX draws its glyphs as text, so no element's generated content is read for them; its MathML copy, clipped to
+  // 1px, is hidden text the metrics leave out
+  glyphs: null,
   sourceOf,
   repository: "QuantEcon/test-lecture-theme-mystmd",
   basePath: "/test-lecture-theme-mystmd/",

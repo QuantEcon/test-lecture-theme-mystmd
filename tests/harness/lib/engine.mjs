@@ -11,7 +11,7 @@
 import { chromium } from "@playwright/test";
 import { SCHEMES } from "./csv.mjs";
 import { PAGE_VIEWPORTS, VIEWPORTS, SiteFault, countDrawn, countParts, describeCounts, fetchUrl, load, oneLine, partsOf, withTimeout } from "./util.mjs";
-import { bodyText, fontFile, measureDrawn, metricRow, renderedFonts } from "./visual.mjs";
+import { bodyText, fontFile, labelOf, mathsEngines, measureDrawn, metricRow, renderedFonts } from "./visual.mjs";
 
 const HYDRATION = /hydrat|did not match|server rendered HTML|Minified React error #(418|419|421|422|423|425)/i;
 
@@ -129,9 +129,11 @@ async function featureTask(browser, run, f, scheme) {
 // The page-wide checks on one page at one reading, then the drawn counts in the same load, and with them, when
 // `run.metrics`, each shown surface's metrics: { rows, counts, uncounted, metrics, faults, fonts }. A page that does
 // not load, or whose scheme does not take effect, gives error rows, empty counts and no metrics; a selector that
-// throws gives that family an empty count, no metrics and an `uncounted` entry, which makes the run exit 1, as does
-// a surface whose measures threw (its row is written, its measures empty, and `faults` names it). `fonts` is what
-// the measured text rendered with and the font files the page loaded, for provenance's fingerprint.
+// throws gives that family an empty count, no metrics and an `uncounted` entry, which makes the run exit 1. `faults`
+// names each metrics problem, by kind: `measures` (a surface's measures threw: its row is written with them empty),
+// `key` (its source threw: its row has no key) and `body text` (the page's body text could not be read: its rows have
+// no body measures). `fonts` is what the measured text rendered with, the font files the page's main frame loaded and
+// those its frames loaded, and the maths engines, for provenance's environment.
 async function pageTask(browser, run, stem, viewport, scheme) {
   const { theme, site, drawn } = run;
   const base = { page: stem, family: "page", viewport, scheme };
@@ -141,8 +143,11 @@ async function pageTask(browser, run, stem, viewport, scheme) {
   try {
     const page = await ctx.newPage();
     const w = watch(page);
-    const fontFiles = new Set();
-    if (run.metrics) page.on("request", (q) => { if (q.resourceType() === "font") { try { fontFiles.add(fontFile(q.url(), site)); } catch {} } });
+    const fontFiles = new Set(), frameFonts = new Set();
+    if (run.metrics) page.on("request", (q) => {
+      if (q.resourceType() !== "font") return;
+      try { (q.frame() === page.mainFrame() ? fontFiles : frameFonts).add(fontFile(q.url(), site)); } catch {}
+    });
     const nav = await load(page, site.url + theme.pagePath(stem));
     if (!nav.ok) {
       const why = `the page did not load: ${nav.detail}`;
@@ -178,26 +183,30 @@ async function pageTask(browser, run, stem, viewport, scheme) {
     const counts = [], uncounted = [], metrics = [], faults = [];
     let body = null;
     if (run.metrics && drawn) {
-      try { body = await bodyText(page, theme); } catch (e) { faults.push({ ...where, family: null, n: null, why: `the body text could not be read: ${oneLine(e.message, 200)}` }); }
+      try { body = await bodyText(page, theme); } catch (e) { faults.push({ ...where, kind: "body text", family: null, n: null, why: `the body text could not be read: ${oneLine(e.message, 200)}` }); }
     }
+    const labels = new Set((run.labels?.[stem] ?? []).map(labelOf));
     for (const f of drawn?.counted ?? []) {
       try {
         const c = run.metrics ? await measureDrawn(page, f.selector, theme) : await countDrawn(page, f.selector);
         counts.push({ ...where, family: f.id, drawn: c.drawn, shown: c.shown });
         for (const s of c.surfaces ?? []) {
-          metrics.push(metricRow(where, f.id, s, body));
-          if (s.fault) faults.push({ ...where, family: f.id, n: s.n, why: `the measures threw: ${oneLine(s.fault, 200)}` });
+          metrics.push(metricRow(where, f.id, s, body, labels));
+          if (s.fault) faults.push({ ...where, kind: "measures", family: f.id, n: s.n, why: `the measures threw: ${oneLine(s.fault, 200)}` });
+          if (s.keyFault) faults.push({ ...where, kind: "key", family: f.id, n: s.n, why: `the key's source threw: ${oneLine(s.keyFault, 200)}` });
         }
       } catch (e) {
         counts.push({ ...where, family: f.id, drawn: "", shown: "" });
         uncounted.push({ ...where, family: f.id, why: `the selector threw: ${oneLine(e.message, 200)}` });
       }
     }
-    // the fonts the measured text rendered with; a failure to read them is recorded, and is no fault of the metrics
+    // the fonts the measured text rendered with, and the maths engines; a failure to read them is recorded, and is no
+    // fault of the metrics
     let fonts = null;
     if (run.metrics && drawn) {
-      try { fonts = { rendered: [...await renderedFonts(page)], files: [...fontFiles], error: null }; }
-      catch (e) { fonts = { rendered: [], files: [...fontFiles], error: oneLine(e.message, 200) }; }
+      fonts = { rendered: [], files: [...fontFiles], frames: [...frameFonts], engines: null, error: null };
+      try { fonts.rendered = [...await renderedFonts(page)]; } catch (e) { fonts.error = oneLine(e.message, 200); }
+      try { fonts.engines = await mathsEngines(page); } catch (e) { fonts.error ??= oneLine(e.message, 200); }
     }
     return { rows, counts, uncounted, metrics, faults, fonts };
   } finally {
@@ -224,17 +233,18 @@ async function pool(tasks, jobs) {
  * contents); `pages` the pages to give the page-wide checks, by default all of them. `drawn` is the drawn table
  * (table.mjs's readDrawn), or null for no counts; the counts are taken in the page-wide checks' loads, so none are
  * taken without them. `metrics` (default true) measures every surface the counts find shown; none without counts.
+ * `labels` is each page's source labels ({ page: [label, …] }, visual.mjs's sourceLabels), the only ids a key takes.
  * Resolves to { rows, counts, uncounted, metrics, faults, fonts, browserVersion }, the rows in the order: features in
  * the table's order (light, then dark; present, then behaviour), then pages in the site's order (desktop, tablet,
  * phone; light, then dark); the counts in the pages' order, then the families in the drawn table's order; `uncounted`
  * each reading not taken, {page, viewport, scheme, family (null for the whole page), why}; the metrics in the counts'
- * order, then by `n`; `faults` each surface whose measures threw, {page, viewport, scheme, family, n, why}; `fonts`
- * every page reading's {rendered, files, error}, or null without metrics.
+ * order, then by `n`; `faults` each metrics problem, {page, viewport, scheme, kind, family, n, why}; `fonts` every
+ * page reading's {rendered, files, frames, engines, error}, or null without metrics.
  */
-export async function runChecks({ theme, table, drawn = null, site, order, pages = order, jobs = 4, only = null, pageChecks = true, metrics = true, onTask = () => {} }) {
+export async function runChecks({ theme, table, drawn = null, site, order, pages = order, jobs = 4, only = null, pageChecks = true, metrics = true, labels = {}, onTask = () => {} }) {
   const browser = await chromium.launch(process.env.HARNESS_CHROMIUM ? { executablePath: process.env.HARNESS_CHROMIUM } : {});
   site = { ...site, pages: order };
-  const run = { theme, site, drawn, metrics: metrics && !!drawn };
+  const run = { theme, site, drawn, metrics: metrics && !!drawn, labels };
   try {
     const tasks = [];
     for (const f of table.features) {

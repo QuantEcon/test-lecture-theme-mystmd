@@ -28,15 +28,22 @@
 // page and the page whose scheme does not take effect (empty). The style metrics (D19) of every surface shown are
 // taken in the same loads and compared with expected-<site>-metrics.csv exactly, value for value and row for row, in
 // order; the fixtures pin every measured box in px, so the values hold on any platform's fonts. Between them: a
-// dominant text that is not the first (a solution's answer under its title), a translucent background composited
-// over the page's, a pair below 4.5:1 (in dark), content wider than its box (an overflow), a surface with no text
-// (its text measures empty), a page with no body text (its body measures empty), an `n` that skips a surface drawn
-// and not shown, and a key from each source the fixtures have: TeX (from MathJax's math list on Sphinx, KaTeX's
-// annotation on mystmd, the same key on both), code (the same on both), a label, and none (pairing falls back to
-// `n`). Then run.mjs is run on each build of the good site with that table, on one page: it must write the same
-// counts and metrics, record the selector that threw in provenance.json (schema 3), and exit 1 for it; with
-// --no-metrics it must write the same counts and no metrics.csv; and its run without page-wide checks must write
-// neither counts.csv nor metrics.csv.
+// dominant text that is not the first (a solution's answer under its title, set smaller than its box), a translucent
+// background composited over the page's, a translucent text colour, a pair below 4.5:1 (in dark), a heading whose two
+// styles tie, maths drawn as its engine draws it (MathJax's glyphs as ::before content, KaTeX's HTML in two fonts)
+// with its hidden copy, longer, left out, hidden text in a closed fold left out, content wider than its box (an
+// overflow), a surface with no text (its text measures empty), a page with no body text (its paragraph is boxed, in
+// a section: its body measures empty), a second body paragraph narrower than the first, an `n` that skips a surface
+// drawn and not shown, and a key from each source: TeX (from MathJax's math list, the inline expression first, on
+// Sphinx, from KaTeX's annotation on mystmd: the same keys on both, the displays in the other order), code (with line
+// numbers on one stack and not the other, and a cell folded whole: the same on both), headings (a page title, the
+// book's title on mystmd's first page), a label from the page's source (selftest/labels.yml), and none (pairing
+// falls back to `n`), where a generated id and a labelled box round the surface give none. Then the unit cases: the
+// key's rules, the labels a page's source gives, the tie check's failure path, the fingerprint, and the measures on a
+// small page of their own, each pinned. Then run.mjs is run on each build of the good site with that table, on one
+// page: it must write the same counts and metrics, record the selector that threw in provenance.json (schema 3), and
+// exit 1 for it; with --no-metrics it must write the same counts and no metrics.csv; and its run without page-wide
+// checks must write neither counts.csv nor metrics.csv.
 //
 // Exit 1 on any mismatch, so the job fails before the real run. In GitHub Actions each site's mismatches are also an
 // ::error:: annotation, so the run's annotations say what CI read.
@@ -49,8 +56,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { METRIC_COLUMNS, countKeyOf, keyOf, metricKeyOf, parseCountsCsv, parseCsv, parseMetricsCsv, toCountsCsv, toCsv, toMetricsCsv } from "../lib/csv.mjs";
 import { runChecks } from "../lib/engine.mjs";
+import { chromium } from "@playwright/test";
+import YAML from "yaml";
 import { serve } from "../lib/server.mjs";
 import { readDrawn, readTable } from "../lib/table.mjs";
+import { bodyText, fingerprint, keyOf as surfaceKey, labelsIn, measureDrawn, tieOf } from "../lib/visual.mjs";
 import theme from "../theme.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -117,7 +127,7 @@ async function check(name, dir, base, table) {
   const server = await serve(dir, base);
   try {
     const site = { mode: "dir", base: server.base, url: server.url, origin: new URL(server.url).origin, publishedBase: new URL(server.base, theme.publishedBase).href };
-    const { rows, counts, metrics, faults } = await runChecks({ theme, table, drawn, site, order: PAGES, jobs: 4 });
+    const { rows, counts, metrics, faults } = await runChecks({ theme, table, drawn, site, order: PAGES, jobs: 4, labels });
     if (write) { process.stdout.write(`--- ${name} at ${base}\n${toCsv(rows)}--- ${name} at ${base}, counts\n${toCountsCsv(counts)}--- ${name} at ${base}, metrics\n${toMetricsCsv(metrics)}`); return []; }
     const want = parseCsv(await readFile(join(HERE, `expected-${name}.csv`), "utf8"));
     const got = new Map(rows.map((r) => [keyOf(r), r]));
@@ -197,7 +207,8 @@ async function drawnCheck(dir, base) {
     const say = (p) => problems.push(`${metrics ? "" : "--no-metrics: "}${p}`);
     try {
       const r = spawnSync(process.execPath, [join(HERE, "..", "run.mjs"), "--dir", dir, "--base-path", base, "--table", join(HERE, "locators.yml"),
-        "--drawn", join(HERE, "drawn.yml"), "--only", "header-title", "--pages", DRAWN_PAGE, ...(metrics ? [] : ["--no-metrics"]), "--quiet", "--out", out], { encoding: "utf8", env });
+        "--drawn", join(HERE, "drawn.yml"), "--labels", join(HERE, "labels.yml"), "--only", "header-title", "--pages", DRAWN_PAGE,
+        ...(metrics ? [] : ["--no-metrics"]), "--quiet", "--out", out], { encoding: "utf8", env });
       if (r.status !== 1) say(`expected exit 1 for the selector that throws, got ${r.status} (${(r.stderr || r.stdout).trim().split("\n").pop()})`);
       const read = async (f) => readFile(join(out, f), "utf8").catch(() => null);
       const [rendered, counts, measured, prov] = [await read("rendered.csv"), await read("counts.csv"), await read("metrics.csv"), JSON.parse((await read("provenance.json")) ?? "null")];
@@ -217,8 +228,9 @@ async function drawnCheck(dir, base) {
       if (metrics) {
         problems.push(...compareMetrics(wantMetrics, parseMetricsCsv(measured)));
         const m = prov.metrics, f = prov.environment?.fonts;
-        if (m?.rows !== wantMetrics.length || m?.tied_to_counts !== true || m?.content !== theme.content || m?.body_text !== theme.bodyText || m?.faults?.length !== 0 || m?.readings?.taken !== 6)
-          say(`expected provenance metrics with rows ${wantMetrics.length}, tied to the counts, this theme's content and body text, no faults and 6 readings taken, got ${JSON.stringify(m)?.slice(0, 300)}`);
+        if (m?.rows !== wantMetrics.length || m?.tied_to_counts !== true || m?.content !== theme.content || m?.body_text !== theme.bodyText || m?.faults?.length !== 0 || m?.readings?.taken !== 6
+          || !String(m?.labels?.from).endsWith("labels.yml") || m?.labels?.pages !== Object.keys(labels).length)
+          say(`expected provenance metrics with rows ${wantMetrics.length}, tied to the counts, this theme's content and body text, no faults, 6 readings taken and the labels from selftest/labels.yml, got ${JSON.stringify(m)?.slice(0, 300)}`);
         if (!/^[0-9a-f]{64}$/.test(f?.fingerprint ?? "") || !f?.rendered?.length) say(`expected provenance environment.fonts with a fingerprint and the fonts the text rendered with, got ${JSON.stringify(f)?.slice(0, 200)}`);
       } else if (prov.metrics !== null || prov.environment?.fonts !== null) say(`expected provenance metrics and environment.fonts null, got ${JSON.stringify(prov.metrics)?.slice(0, 120)}, ${JSON.stringify(prov.environment?.fonts)?.slice(0, 80)}`);
     } finally {
@@ -230,11 +242,106 @@ async function drawnCheck(dir, base) {
   return problems;
 }
 
+// The unit cases, each value pinned here: the key's rules (visual.mjs's keyOf), the labels a page's source gives
+// (labelsIn), the tie check's failure path (tieOf), the fingerprint, and the measures (measureDrawn, bodyText) on a
+// small page of their own, with a stand-in theme. So a rule that changes is caught where no fixture page shows it.
+const UNIT_PAGE = `<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:0;font:16px sans-serif;color:#000000;background:#ffffff} .s{display:block;width:300px;height:40px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden} .clip{position:absolute;clip:rect(1px,1px,1px,1px)}
+.cp{display:inline-block;clip-path:inset(50%)} i-g{display:inline-block;color:#111111;font-size:20px} i-g::before{content:"x"}
+</style></head><body>
+<div class="s" id="tie"><span style="color:#111111">abcde</span><span style="color:#222222">fghij</span></div>
+<div class="s" id="space"><span style="color:#111111">abcdefg</span><span style="color:#222222">a b c d e f</span><span style="color:#333333">\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b</span></div>
+<div class="s" id="hidden"><span style="color:#111111">abc</span><span style="display:none;color:#a00000">abcdefgh</span><span style="visibility:hidden;color:#a10000">abcdefgh</span><span style="opacity:0;color:#a20000">abcdefgh</span><span class="sr" style="color:#a30000">abcdefgh</span><span class="clip" style="color:#a40000">abcdefgh</span><span class="cp" style="color:#a50000">abcdefgh</span></div>
+<div class="s" id="glyph"><i-g></i-g><i-g></i-g><i-g></i-g><span style="color:#222222">ab</span></div>
+<div class="s" id="translucent"><span style="color:rgba(0,0,0,0.5)">abc</span></div>
+<div class="s" id="size" style="font-size:16px;line-height:20px"><span style="font-size:20px;line-height:30px">abc</span></div>
+<p><span id="inline">abc</span></p>
+<div style="background:#000080"><div style="background:rgba(255,255,255,0.5)"><div class="s" id="bg"><span style="color:#ffffff">abc</span></div></div></div>
+<div class="s n">one</div><div class="s n" style="display:none">two</div><div class="s n">three</div>
+<main id="u-root" style="width:600px"><p class="b" style="width:400px;font-size:17px;line-height:25px">first</p><p class="b" style="width:300px;font-size:13px">second</p></main>
+<div id="box-label"><p class="s u-own">in a labelled box</p></div>
+<div class="math" id="equation-q"><mjx-container class="u-mjx" jax="CHTML" display="true" style="display:block;height:20px">q</mjx-container></div>
+<div id="q"><div><span class="katex-display u-katex" style="display:block;height:20px">q</span></div></div>
+<ol><li class="myst-footnotes-item s" id="fn-note-1">a footnote</li></ol>
+</body></html>`;
+const UNIT_THEME = { content: "body", glyphs: "i-g", sourceOf: function sourceOf() { return {}; } };
+const THROWING_THEME = { content: "body", glyphs: null, sourceOf: function sourceOf() { throw new Error("a source that throws, deliberately"); } };
+
+async function unitChecks() {
+  const problems = [];
+  const eq = (what, got, want) => { if (JSON.stringify(got) !== JSON.stringify(want)) problems.push(`${what}: expected ${JSON.stringify(want)}, got ${JSON.stringify(got)}`); };
+  // the key's rules
+  const L = new Set(["eq-cagan-demand"]);
+  eq("key: TeX with its wrappers, spacing, \\tag, \\label and \\nonumber, as Sphinx writes it", surfaceKey({ tex: "\\begin{split}\\begin{aligned} ab \\,&= \\bar{c} \\\\ c &= d\\:e \\tag{1}\\label{eq:x}\\nonumber \\end{aligned}\\end{split}" }), "tex:be2a7fa15430");
+  eq("key: the same TeX as mystmd writes it", surfaceKey({ tex: "\\begin{aligned} ab &= \\bar{c} \\\\\nc &= d~e \\end{aligned}" }), "tex:be2a7fa15430");
+  eq("key: TeX without the line break is other TeX", surfaceKey({ tex: "ab &= \\bar{c} c &= de" }), "tex:dfc0b224d309");
+  eq("key: code, its whitespace removed", [surfaceKey({ code: "import numpy as np\n  x = 1\n" }), surfaceKey({ code: "import numpy as np x=1" })], ["code:9b8d047c8724", "code:9b8d047c8724"]);
+  eq("key: a heading, its whitespace removed and lower-cased", [surfaceKey({ heading: "Lists ab12c" }), surfaceKey({ heading: " LISTS  AB12C " })], ["heading:6aebc406e6d3", "heading:6aebc406e6d3"]);
+  eq("key: a label, normalised, and only one the page's source has", [surfaceKey({ label: "equation-Eq:Cagan_Demand" }, L), surfaceKey({ label: "id1" }, L), surfaceKey({ label: "eq-cagan-demand" })], ["label:9de743c9815c", "", ""]);
+  eq("key: TeX before code, heading and label", surfaceKey({ tex: "x", code: "y", heading: "z", label: "eq-cagan-demand" }, L), "tex:2d711642b726");
+  eq("key: a source empty once normalised gives way to the next", [surfaceKey({ code: " \n ", label: "eq-cagan-demand" }, L), surfaceKey({ tex: "\\, ~", heading: "Lists" })], ["label:9de743c9815c", "heading:4c14c4a453f9"]);
+  eq("labels: a MyST page's targets, :label: and :name:, equation labels, \\label and footnotes",
+    [...labelsIn("(Sec_One)=\n# Head\n:label: Short_Path_Ex1\n:name: \"flow_fig\"\n$$\nx \\label{a:y0}\n$$ (eq:cagan_demand)\n[^footnote-1]: x\nnot a (label)= here")].sort(),
+    ["a-y0", "eq-cagan-demand", "flow-fig", "footnote-1", "sec-one", "short-path-ex1"]);
+  // the tie check, holding and failing
+  const c = (family, shown) => ({ page: "p", family, viewport: "desktop", scheme: "light", drawn: shown, shown });
+  const m = (family, n) => ({ page: "p", family, viewport: "desktop", scheme: "light", n });
+  eq("tie: rows that number each reading's shown", tieOf([c("f", 2), c("g", "")], [m("f", 1), m("f", 2)]), { ok: true, readings: 1, surfaces: 2, off: [] });
+  eq("tie: too few rows, rows for a reading not counted, rows for no count", tieOf([c("f", 2), c("g", "")], [m("f", 1), m("g", 1), m("h", 1)]),
+    { ok: false, readings: 1, surfaces: 2, off: ["p|f|desktop|light: 1 rows, shown 2", "p|g|desktop|light: 1 rows, shown empty", "p|h|desktop|light: 1 rows, and no count"] });
+  // the fingerprint, and each of its three parts in it
+  const R = new Set(["F (F-Regular), web"]), F = new Set(["fonts/a.woff2"]), I = ["DejaVu Sans: style=Book fontversion=1 file=/x.ttf"];
+  eq("fingerprint: the installed fonts, the font files and the rendered fonts", [fingerprint(R, F, I), fingerprint(R, new Set(), I), fingerprint(R, F, []), fingerprint(new Set(), F, I)],
+    ["c41673c74de7fcaeb5cbe6bf963afc37aab9216358aa61e1c49f43245b4b998e", "064f7ba8039d40c738238b8eb5c858f0b80e3f030c7914f96a4ed6d4498aaf63",
+      "051b0140ed88dcd2eb8f510984383a9291f3190b89e185140cdcd6aef5901c84", "964ba3f3156ac910583b5c393d4d304b17bacc6fbfd43bd5797ed951f4a433e9"]);
+  // the measures, on a page of their own
+  const browser = await chromium.launch(process.env.HARNESS_CHROMIUM ? { executablePath: process.env.HARNESS_CHROMIUM } : {});
+  try {
+    const page = await browser.newPage({ viewport: { width: 800, height: 600 } });
+    await page.setContent(UNIT_PAGE);
+    const one = async (sel, t = UNIT_THEME) => (await measureDrawn(page, sel, t)).surfaces[0];
+    const pick = (o, keys) => Object.fromEntries(keys.map((k) => [k, o?.[k]]));
+    eq("measure: two styles with as many characters: the first", pick(await one("#tie"), ["text", "colour"]), { text: "span", colour: "#111111" });
+    eq("measure: whitespace and zero-width characters not counted", pick(await one("#space"), ["colour"]), { colour: "#111111" });
+    eq("measure: hidden text left out (display, visibility, opacity, a 1px box, a clip, a clip-path)", pick(await one("#hidden"), ["colour"]), { colour: "#111111" });
+    eq("measure: glyphs drawn as ::before content (the theme's glyphs)", pick(await one("#glyph"), ["text", "font_size", "colour"]), { text: "i-g", font_size: 20, colour: "#111111" });
+    eq("measure: a translucent text colour, composited over its background", pick(await one("#translucent"), ["colour", "background", "contrast"]), { colour: "#808080", background: "#ffffff", contrast: "3.95" });
+    eq("measure: the dominant text's size and line height, not the surface's", pick(await one("#size"), ["font_size", "line_height"]), { font_size: 20, line_height: 30 });
+    eq("measure: an inline box has no overflow to read", pick(await one("#inline"), ["overflow"]), { overflow: "" });
+    eq("measure: translucent backgrounds composited in order over the first opaque one", pick(await one("#bg"), ["colour", "background", "contrast"]), { colour: "#ffffff", background: "#8080c0", contrast: "3.64" });
+    const n = await measureDrawn(page, ".n", UNIT_THEME);
+    eq("measure: n is the place among the drawn matches, and only the shown are measured", { drawn: n.drawn, shown: n.shown, n: n.surfaces.map((x) => x.n) }, { drawn: 3, shown: 2, n: [1, 3] });
+    eq("body text: the first shown match, its width the column", await bodyText(page, { content: "#u-root", bodyText: "p.b" }), { body_font_size: 17, body_line_height: 25, column: 400 });
+    // the theme's own label sites, on markup in its own form
+    const label = async (sel) => (await measureDrawn(page, sel, theme)).surfaces[0]?.source?.label ?? null;
+    eq("theme: a surface with no id of its own takes no label from the box round it", await label(".u-own"), null);
+    if (theme.side === "sphinx") eq("theme: a display's label is on its div.math", await label(".u-mjx"), "equation-q");
+    else {
+      eq("theme: a display's label is on the block mystmd draws round it", await label(".u-katex"), "q");
+      eq("theme: a footnote's label, without the fn- mystmd writes before it", await label("#fn-note-1"), "note-1");
+    }
+    const thrown = await one("#tie", THROWING_THEME);
+    eq("measure: a source that throws keeps the measures, and says so", { keyFault: /deliberately/.test(thrown?.keyFault ?? ""), text: thrown?.text }, { keyFault: true, text: "span" });
+  } finally {
+    await browser.close();
+  }
+  console.log(`${problems.length ? "FAIL" : "ok  "} the unit cases: the key's rules, the source labels, the tie check, the fingerprint and the measures${problems.length ? `, ${problems.length} mismatch(es)` : ""}`);
+  for (const p of problems) console.log(`       ${p}`);
+  return problems;
+}
+
+const labels = YAML.parse(await readFile(join(HERE, "labels.yml"), "utf8"));
 const table = await readTable(join(HERE, "locators.yml"), theme.side);
 const drawn = await readDrawn(join(HERE, "drawn.yml"), theme.side);
 const work = await mkdtemp(join(tmpdir(), "harness-selftest-"));
 let bad = 0;
 try {
+  if (!write) {
+    const problems = await unitChecks();
+    bad += problems.length;
+    if (problems.length) annotate("error", ["self-test: the unit cases", ...problems]);
+  }
   const seen = new Map(); // a site's mismatches at the first base, so the second base's same ones are named once
   for (const base of BASES) {
     const into = join(work, base === "/" ? "root" : "base");
