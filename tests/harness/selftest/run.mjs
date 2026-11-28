@@ -320,7 +320,7 @@ async function unitChecks() {
     eq("measure: two styles with as many characters: the first", pick(await one("#tie"), ["text", "colour"]), { text: "span", colour: "#111111" });
     eq("measure: whitespace and zero-width characters not counted", pick(await one("#space"), ["colour"]), { colour: "#111111" });
     eq("measure: hidden text left out (display, visibility, opacity, a 1px box, a clip, a clip-path)", pick(await one("#hidden"), ["colour"]), { colour: "#111111" });
-    eq("measure: glyphs drawn as ::before content (the theme's glyphs)", pick(await one("#glyph"), ["text", "font_size", "colour"]), { text: "i-g", font_size: 20, colour: "#111111" });
+    eq("measure: glyphs drawn as ::before content (the theme's glyphs), with no line height", pick(await one("#glyph"), ["text", "font_size", "line_height", "colour"]), { text: "i-g", font_size: 20, line_height: "", colour: "#111111" });
     eq("measure: a translucent text colour, composited over its background", pick(await one("#translucent"), ["colour", "background", "contrast"]), { colour: "#808080", background: "#ffffff", contrast: "3.95" });
     eq("measure: the dominant text's size and line height, not the surface's", pick(await one("#size"), ["font_size", "line_height"]), { font_size: 20, line_height: 30 });
     eq("measure: an inline box has no overflow to read", pick(await one("#inline"), ["overflow"]), { overflow: "" });
