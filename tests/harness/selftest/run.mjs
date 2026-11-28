@@ -286,6 +286,7 @@ async function unitChecks() {
   eq("key: TeX without the line break is other TeX", surfaceKey({ tex: "ab &= \\bar{c} c &= de" }), "tex:dfc0b224d309");
   eq("key: code, its whitespace removed", [surfaceKey({ code: "import numpy as np\n  x = 1\n" }), surfaceKey({ code: "import numpy as np x=1" })], ["code:9b8d047c8724", "code:9b8d047c8724"]);
   eq("key: a heading, its whitespace removed and lower-cased", [surfaceKey({ heading: "Lists ab12c" }), surfaceKey({ heading: " LISTS  AB12C " })], ["heading:6aebc406e6d3", "heading:6aebc406e6d3"]);
+  eq("key: a heading's inline maths, its TeX normalised as TeX is, and other than the same text", [surfaceKey({ heading: "Sums over \uE000x_i\\,\uE001" }), surfaceKey({ heading: "Sums over \uE000x_i\uE001" }), surfaceKey({ heading: "Sums over x_i" })], ["heading:29a94ab19d24", "heading:29a94ab19d24", "heading:6f33d42a3850"]);
   eq("key: a label, normalised, and only one the page's source has", [surfaceKey({ label: "equation-Eq:Cagan_Demand" }, L), surfaceKey({ label: "id1" }, L), surfaceKey({ label: "eq-cagan-demand" })], ["label:9de743c9815c", "", ""]);
   eq("key: TeX before code, heading and label", surfaceKey({ tex: "x", code: "y", heading: "z", label: "eq-cagan-demand" }, L), "tex:2d711642b726");
   eq("key: code before heading, and heading before label", [surfaceKey({ code: "y", heading: "z", label: "eq-cagan-demand" }, L), surfaceKey({ heading: "z", label: "eq-cagan-demand" }, L)], ["code:a1fce4363854", "heading:594e519ae499"]);
