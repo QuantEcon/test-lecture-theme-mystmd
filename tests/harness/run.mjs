@@ -210,6 +210,7 @@ async function main() {
     } catch (e) { late("fonts", `the fonts the pages read could not be gathered: ${e.message}`); }
     // fc-list missing or failing: the fingerprint has no installed fonts, and says so
     try { installed = installedFonts(); } catch (e) { late("fonts", `the installed fonts could not be listed (fc-list), so the fingerprint has none of them: ${e.message}`); }
+    if (installed && !installed.lines.length) late("fonts", "fc-list listed no installed fonts, so the fingerprint has none of them");
     if (installed?.unread.length) late("fonts", `${installed.unread.length} installed font file(s) could not be read, so the fingerprint has their names, not their bytes: ${installed.unread.slice(0, 3).join("; ")}`);
     try { print = fingerprint(rendered, files, installed?.lines ?? []); } catch (e) { late("fonts", `the fonts could not be fingerprinted: ${e.message}`); }
   }

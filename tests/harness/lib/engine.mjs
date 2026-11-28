@@ -148,23 +148,27 @@ async function pageTask(browser, run, stem, viewport, scheme) {
   try {
     const page = await ctx.newPage();
     const w = watch(page);
-    // the font files the page loads, each with a hash of its bytes: one whose bytes cannot be read is listed by its
-    // address alone, and one that cannot be read at all is left out, each a fonts problem
-    const fontFiles = new Set(), frameFonts = new Set(), fontBodies = [], fontFaults = [];
+    // the font files the page loads, each with a hash of its bytes. A redirect is no font file (the answer it leads to
+    // is). In the main frame, whose files the fingerprint takes, one whose bytes cannot be read is listed by its
+    // address alone, and one that cannot be read at all is left out, each a fonts problem; an embedded frame's are
+    // listed apart, with their hash where there is one, and are never a problem, as the fingerprint leaves them out
+    const fontFiles = new Set(), frameFonts = new Set(), fontBodies = [], frameBodies = [], fontFaults = [];
     if (run.metrics) page.on("response", (r) => {
-      let font = false;
-      try { font = r.request().resourceType() === "font"; } catch (e) { fontFaults.push(`a response could not be read, so a font it may be is left out: ${oneLine(e.message, 160)}`); }
+      let font = false, main = true;
+      try {
+        font = r.request().resourceType() === "font" && !(r.status() >= 300 && r.status() < 400);
+        main = r.frame() === page.mainFrame();
+      } catch (e) { fontFaults.push(`a response could not be read, so a font it may be is left out: ${oneLine(e.message, 160)}`); }
       if (!font) return;
-      fontBodies.push((async () => {
+      (main ? fontBodies : frameBodies).push((async () => {
         let name = null;
         try {
           name = fontFile(r.url(), site);
           let body = null, why = "no body";
           try { body = await r.body(); } catch (e) { why = oneLine(e.message, 160); }
-          const main = r.frame() === page.mainFrame();
           (main ? fontFiles : frameFonts).add(body ? `${name} sha256:${createHash("sha256").update(body).digest("hex").slice(0, 12)}` : name);
-          if (!body) fontFaults.push(`the font ${name}${main ? "" : " (in a frame)"} is listed by its address, not its bytes: ${why}`);
-        } catch (e) { fontFaults.push(`a font response could not be read, so it is left out${name ? ` (${name})` : ""}: ${oneLine(e.message, 160)}`); }
+          if (!body && main) fontFaults.push(`the font ${name} is listed by its address, not its bytes: ${why}`);
+        } catch (e) { if (main) fontFaults.push(`a font response could not be read, so it is left out${name ? ` (${name})` : ""}: ${oneLine(e.message, 160)}`); }
       })());
     });
     const nav = await load(page, site.url + theme.pagePath(stem));
@@ -229,10 +233,15 @@ async function pageTask(browser, run, stem, viewport, scheme) {
     let fonts = null;
     if (run.metrics && drawn) {
       const font = (why) => faults.push({ ...where, kind: "fonts", family: null, n: null, why });
-      let timer = null;
-      const settled = await Promise.race([Promise.allSettled(fontBodies).then(() => true), new Promise((r) => { timer = setTimeout(() => r(false), FONT_WAIT); })]);
-      clearTimeout(timer);
-      if (!settled) font(`the font files' bytes were not all read in ${FONT_WAIT / 1000} s, so the fingerprint may lack some`);
+      const within = async (list, ms) => {
+        let timer = null;
+        const done = await Promise.race([Promise.allSettled(list).then(() => true), new Promise((r) => { timer = setTimeout(() => r(false), ms); })]);
+        clearTimeout(timer);
+        return done;
+      };
+      if (!await within(fontBodies, FONT_WAIT)) font(`the font files' bytes were not all read in ${FONT_WAIT / 1000} s, so the fingerprint may lack some`);
+      // a frame's fonts, for the listing alone: waited for a little, never a problem
+      await within(frameBodies, 2_000);
       for (const why of fontFaults) font(why);
       fonts = { rendered: [], files: [...fontFiles], frames: [...frameFonts], engines: null, error: null };
       try { fonts.rendered = [...await renderedFonts(page)]; } catch (e) { fonts.error = oneLine(e.message, 200); }

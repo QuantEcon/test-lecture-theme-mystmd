@@ -67,7 +67,7 @@ typography,cite-parenthetical,desktop,light,1,1
 typography,math-display,desktop,light,0,0
 typography,heading-h1,desktop,light,1,1
 typography,heading-h2,desktop,light,2,2
-typography,table,desktop,light,0,0
+typography,table,desktop,light,1,1
 typography,figure,desktop,light,,
 typography,code-cell,desktop,dark,0,0
 typography,cell-output,desktop,dark,0,0
@@ -77,7 +77,7 @@ typography,cite-parenthetical,desktop,dark,1,1
 typography,math-display,desktop,dark,0,0
 typography,heading-h1,desktop,dark,1,1
 typography,heading-h2,desktop,dark,2,2
-typography,table,desktop,dark,0,0
+typography,table,desktop,dark,1,1
 typography,figure,desktop,dark,,
 typography,code-cell,tablet,light,0,0
 typography,cell-output,tablet,light,0,0
@@ -87,7 +87,7 @@ typography,cite-parenthetical,tablet,light,1,1
 typography,math-display,tablet,light,0,0
 typography,heading-h1,tablet,light,1,1
 typography,heading-h2,tablet,light,2,2
-typography,table,tablet,light,0,0
+typography,table,tablet,light,1,1
 typography,figure,tablet,light,,
 typography,code-cell,tablet,dark,0,0
 typography,cell-output,tablet,dark,0,0
@@ -97,7 +97,7 @@ typography,cite-parenthetical,tablet,dark,1,1
 typography,math-display,tablet,dark,0,0
 typography,heading-h1,tablet,dark,1,1
 typography,heading-h2,tablet,dark,2,2
-typography,table,tablet,dark,0,0
+typography,table,tablet,dark,1,1
 typography,figure,tablet,dark,,
 typography,code-cell,phone,light,0,0
 typography,cell-output,phone,light,0,0
@@ -107,7 +107,7 @@ typography,cite-parenthetical,phone,light,1,1
 typography,math-display,phone,light,0,0
 typography,heading-h1,phone,light,1,1
 typography,heading-h2,phone,light,2,2
-typography,table,phone,light,0,0
+typography,table,phone,light,1,1
 typography,figure,phone,light,,
 typography,code-cell,phone,dark,0,0
 typography,cell-output,phone,dark,0,0
@@ -117,7 +117,7 @@ typography,cite-parenthetical,phone,dark,1,1
 typography,math-display,phone,dark,0,0
 typography,heading-h1,phone,dark,1,1
 typography,heading-h2,phone,dark,2,2
-typography,table,phone,dark,0,0
+typography,table,phone,dark,1,1
 typography,figure,phone,dark,,
 code_cells,code-cell,desktop,light,4,3
 code_cells,cell-output,desktop,light,2,1

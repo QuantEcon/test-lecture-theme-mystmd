@@ -46,7 +46,9 @@ article main h1{margin:0;height:40px;font-size:32px;line-height:40px} h2{margin:
      page's source writes it (selftest/labels.yml), so it is its key. The citation inside it has no id, so it has no
      key and pairs by n, and takes none from the box it sits in -->
 <aside id="selftest-sol-1" class="myst-exercise"><div class="myst-exercise-header"><div class="myst-exercise-title">Solution to <span data-state="closed"><a href="#selftest-ex-1" class="hover-link">Exercise&nbsp;1</a></span></div></div><div class="myst-exercise-body"><p>It holds, since every term of the series is positive and their sum is finite, as <span class="cite-group parenthetical"><cite data-state="closed"><span class="hover-link">Russell, 2004</span></cite></span> shows.</p></div></aside>
-</main></article>
+<!-- the metrics: a labelled table, whose label myst-theme puts on the figure round it, not on the table, so the
+     table pairs by n here -->
+<figure id="selftest-tbl-1" class="fig-table"><table style="width:300px;height:40px;border-collapse:collapse"><tbody><tr><td>a table with a label of its own</td></tr></tbody></table></figure></main></article>
 <script>/* a working toggle: switches the page and keeps the choice */
 document.querySelector('button[aria-label="Change contrast"]').addEventListener("click", function () {
   const dark = !document.documentElement.classList.contains("dark");

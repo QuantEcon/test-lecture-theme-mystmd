@@ -10,6 +10,7 @@ import { press, settleBase, stableDom, oneLine, said, sleep } from "./lib/util.m
 import { MARKER_NAMES, errorMarkers } from "./lib/markers.mjs";
 import { parseCsv } from "./lib/csv.mjs";
 import * as B from "./lib/behave.mjs";
+import { LABEL_IDS } from "./lib/labels.mjs";
 const { pass, fail, skip, yes } = B;
 
 const FIRST = "intro"; // the site's first page, which mystmd serves at the base itself
@@ -159,21 +160,8 @@ async function itemWords(c, it) {
 /** Does the item give this page's notebook? Its URL's file, or the name of the file it downloads. */
 const givesNotebook = (it, stem) => (it.url && new URL(it.url).pathname.endsWith(`/${stem}.ipynb`)) || it.selected?.file === `${stem}.ipynb`;
 
-// mystmd's ids for a label (myst-common's normalizeIdentifier and createHtmlId, the same at QE_MYSTMD_SHA): its
-// identifier, whitespace collapsed, quotes dropped, trimmed and lower-cased; and its html id, from that, every other
-// character as `-`, `id-` before a leading digit or hyphen, runs of `-` as one, and none at either end
-export function mystIdentifier(label) {
-  return String(label).replace(/[\t\n\r ]+/g, " ").replace(/['\u2018\u2019"\u201c\u201d]+/g, "").trim().toLowerCase();
-}
-export function mystHtmlId(identifier) {
-  return String(identifier).toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/^([0-9-])/, "id-$1").replace(/-[-]+/g, "-").replace(/(?:^[-]+)|(?:[-]+$)/g, "");
-}
-
-/**
- * The ids this build gives a source label: its html id (a target, a directive's label, an equation), and its
- * identifier, which a footnote's id is after `fn-` (myst-theme's `fn-${identifier}`).
- */
-const labelIds = (label) => { const id = mystIdentifier(label); return [mystHtmlId(id), id]; };
+// the ids this build gives a source label: lib/labels.mjs, which holds both stacks' rules
+const labelIds = LABEL_IDS.mystmd;
 
 const behaviours = {
   ...B.commonBehaviours(profile),
@@ -446,6 +434,9 @@ export default {
   // KaTeX draws its glyphs as text, so no element's generated content is read for them; its MathML copy, clipped to
   // 1px, is hidden text the metrics leave out
   glyphs: null,
+  // a heading's number, which the theme writes in a span of its own before the heading's text, left out of its
+  // dominant text: a heading reads as its own text however short
+  textSkip: ":is(h1, h2, h3, h4, h5, h6) > span.select-none",
   sourceOf,
   labelIds,
   repository: "QuantEcon/test-lecture-theme-mystmd",
