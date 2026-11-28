@@ -6,9 +6,9 @@ typography,dark-mode,behaviour,desktop,light,pass,toggled from light to dark; on
 typography,dark-mode,present,desktop,dark,pass,toggle 1 (1 visible); dark 1 (1 visible)
 typography,dark-mode,behaviour,desktop,dark,pass,toggled from dark to light; on code_cells: light; after a reload: light
 typography,dark-palette,present,desktop,light,absent,0 (0 visible)
-typography,dark-palette,behaviour,desktop,light,skip,absent in light by design
+typography,dark-palette,behaviour,desktop,light,skip,"absent in light by design. The light colours, for the visual layer's before and after: page #ffffff, text #000000, link #0000ee"
 typography,dark-palette,present,desktop,dark,pass,1 (1 visible)
-typography,dark-palette,behaviour,desktop,dark,skip,No palette is expected
+typography,dark-palette,behaviour,desktop,dark,skip,"dark: page #1c1917, text #dddddd, link #0000ee. No palette is expected"
 code_cells,stderr-fold,present,desktop,light,pass,1 (1 visible)
 code_cells,stderr-fold,behaviour,desktop,light,pass,on load: hidden; after the toggle: shown
 code_cells,stderr-fold,present,desktop,dark,pass,1 (1 visible)

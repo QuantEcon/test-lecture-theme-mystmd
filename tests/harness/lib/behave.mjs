@@ -2,7 +2,8 @@
 // Each resolves to { result: "pass" | "fail" | "skip", detail }; a throw becomes an `error` row.
 //
 // This file is the same in QuantEcon/test-lecture-theme-sphinx and QuantEcon/test-lecture-theme-mystmd.
-import { SiteFault, answered, oneLine, press, said, sleep } from "./util.mjs";
+import { SiteFault, answered, inPage, oneLine, press, said, sleep } from "./util.mjs";
+import { harnessPaint } from "./visual.mjs";
 
 export const pass = (detail) => ({ result: "pass", detail });
 export const fail = (detail) => ({ result: "fail", detail });
@@ -225,17 +226,19 @@ export async function visibleText(handle) {
   });
 }
 
-/** The page's, a paragraph's and a link's colours. */
+// The page's, a paragraph's and a link's colours, as `#rrggbb`: the surface's background, and the text's and the
+// link's colours over theirs, by the metrics' one colour routine (visual.mjs's harnessPaint: translucent backgrounds
+// composited), so this row and metrics.csv never read a colour two ways. The elements are the ones dark-palette has
+// always read (the first paragraph and the first link in one), so only the compositing and the format are new.
+const COLOURS = inPage(({ surface, text, link }) => {
+  const kit = harnessPaint();
+  const pick = (sel) => document.querySelector(sel);
+  const s = pick(surface), t = pick(text), l = pick(link);
+  return { page: s ? kit.background(s) : null, text: t ? kit.paint(t).colour : null, link: l ? kit.paint(l).colour : null };
+}, harnessPaint);
+
 export async function colours(page, { surface, text, link }) {
-  return page.evaluate(({ surface, text, link }) => {
-    const pick = (sel) => document.querySelector(sel);
-    const bg = (e) => {
-      for (let x = e; x; x = x.parentElement) { const c = getComputedStyle(x).backgroundColor; if (c && c !== "rgba(0, 0, 0, 0)" && c !== "transparent") return c; }
-      return getComputedStyle(document.documentElement).backgroundColor;
-    };
-    const s = pick(surface), t = pick(text), l = pick(link);
-    return { page: s ? bg(s) : null, text: t ? getComputedStyle(t).color : null, link: l ? getComputedStyle(l).color : null };
-  }, { surface, text, link });
+  return page.evaluate(COLOURS, { surface, text, link });
 }
 
 /** Overlap of two boxes, in px², and the boxes. */
@@ -251,7 +254,8 @@ export async function overlap(page, a, b) {
 }
 
 // ---- the behaviours that read the same on both themes, given the theme's profile -------------------------------
-// profile: { text: the lecture text's container, para: its paragraphs, stemOf(href, base): a link's page stem,
+// profile: { text: the lecture text's container (the content root), para: its paragraphs, body: its body text (a
+//            paragraph of running text in no box, a selector inside `text`), stemOf(href, base): a link's page stem,
 //            maths: { all: every rendered expression, menu: the expression's context menu, or null } }
 
 /** The notebook a launch target opens: Colab's GitHub path, as a github.com page. */

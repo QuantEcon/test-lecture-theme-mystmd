@@ -10,6 +10,7 @@ import { press, settleBase, stableDom, oneLine, said, sleep } from "./lib/util.m
 import { MARKER_NAMES, errorMarkers } from "./lib/markers.mjs";
 import { parseCsv } from "./lib/csv.mjs";
 import * as B from "./lib/behave.mjs";
+import { LABEL_IDS } from "./lib/labels.mjs";
 const { pass, fail, skip, yes } = B;
 
 const FIRST = "intro"; // the site's first page, which mystmd serves at the base itself
@@ -22,13 +23,69 @@ function stemOf(href, base, site) {
   return (path.split("/").pop() ?? "").replace(/\.html$/, "").replace(/-/g, "_");
 }
 
+// The content root, `article.article`: the lecture text, the drawn selectors' scope, and the metrics' (D19). The
+// body text: a paragraph directly in one of the theme's prose blocks (`div.prose-qetext-light`, a block of the
+// page's running text; a box's paragraphs sit in its own body, the footer's in `qe-site-footer`, the outline's in
+// `nav.qe-outline`). `para` takes every paragraph of the text, boxed ones too, so it serves the behaviours that read
+// the text (font-size, dark-palette), and `body` is the metrics' reference for size and column.
 const profile = {
   text: "article.article", // the lecture text
   para: "article.article main p:not(.qe-outline *)", // not the outline's "Powered by MyST Markdown"
+  body: ".prose-qetext-light > p", // inside `text`
   stemOf,
   maths: { all: ".katex", menu: null },
 };
 
+/**
+ * Where a surface's pairing key sits on this theme (lib/visual.mjs normalises and hashes it; decision 3 of
+ * QuantEcon/project-theme-parity#80). Runs in the page, on a shown surface, with the content root. Each is there only
+ * where the surface has it: `tex`, a display maths element's TeX, from the annotation KaTeX writes into its MathML;
+ * `code`, the input of the cell the surface is or lies in (its code block, not one in its outputs), or that a
+ * dropdown folding a whole cell holds (hide-cell), or of the code block it is or lies in, without the line numbers
+ * the highlighter writes into it; `heading`, a heading's text without its number or permalink (the theme's
+ * `.heading-text` where it writes one; a page title's number, "2. ", is plain text before it; each inline maths
+ * element replaced by the TeX in KaTeX's annotation between U+E000 and U+E001), or the book's title
+ * where the first page has no title of its own; `label`, the id at the surface's own label site, the surface itself
+ * or, for a display, the block mystmd puts its label on (two levels up), with the `fn-` mystmd puts before a
+ * footnote's label dropped. The engine keeps a label only where it is an id `labelIds` gives one of the page's source
+ * labels, so mystmd's generated ids (ten-character keys such as `rucnplfZ7R`, React's `:R55anop:`) never become keys.
+ */
+function sourceOf(e, root) {
+  const out = {};
+  if (e.matches(".katex-display, .katex")) {
+    const a = e.querySelector('annotation[encoding="application/x-tex"]');
+    if (a) out.tex = a.textContent;
+  }
+  const cell = e.closest(".myst-jp-nb-block[id]") ?? (e.matches("details.myst-dropdown") ? e.querySelector(":scope > .myst-dropdown-body > .myst-jp-nb-block") : null);
+  const code = cell ? [...cell.querySelectorAll(".myst-code code")].find((c) => !c.closest('[data-name="outputs-container"]'))
+    : e.closest(".myst-code")?.querySelector("code");
+  if (code) {
+    const c = code.cloneNode(true);
+    for (const x of c.querySelectorAll(".react-syntax-highlighter-line-number, .linenumber")) x.remove();
+    out.code = c.textContent;
+  }
+  if (/^H[1-6]$/.test(e.tagName)) {
+    const maths = (h) => {
+      for (const k of h.querySelectorAll(".katex")) k.replaceWith(`\uE000${k.querySelector('annotation[encoding="application/x-tex"]')?.textContent ?? ""}\uE001`);
+      return h;
+    };
+    const text = e.querySelector(".heading-text");
+    if (text) out.heading = maths(text.cloneNode(true)).textContent;
+    else {
+      const h = e.cloneNode(true);
+      for (const x of h.querySelectorAll(".select-none, a[aria-label]")) x.remove();
+      // a page title's number, which the theme writes as text of its own before the title ("2", ". "); a number the
+      // author wrote in the title is the title's, as Sphinx keeps it
+      const parts = [...h.childNodes].filter((n) => n.nodeType !== Node.COMMENT_NODE);
+      if (parts.length > 2 && parts[0].nodeType === Node.TEXT_NODE && /^\d+(?:\.\d+)*$/.test(parts[0].nodeValue.trim())
+        && parts[1].nodeType === Node.TEXT_NODE && parts[1].nodeValue.trim() === ".") { parts[0].remove(); parts[1].remove(); }
+      out.heading = maths(h).textContent;
+    }
+  } else if (e.matches('[aria-label="Book title"]')) out.heading = e.textContent;
+  const site = e.matches(".katex-display") ? e.parentElement?.parentElement : e;
+  if (site?.id) out.label = e.matches(".myst-footnotes-item") ? site.id.replace(/^fn-/, "") : site.id;
+  return out;
+}
 
 /** Open a Radix menu by its trigger and read its items: each one's label, and its link (its own or one inside it), or
  * null; Escape closes it again. */
@@ -102,6 +159,9 @@ async function itemWords(c, it) {
 
 /** Does the item give this page's notebook? Its URL's file, or the name of the file it downloads. */
 const givesNotebook = (it, stem) => (it.url && new URL(it.url).pathname.endsWith(`/${stem}.ipynb`)) || it.selected?.file === `${stem}.ipynb`;
+
+// the ids this build gives a source label: lib/labels.mjs, which holds both stacks' rules
+const labelIds = LABEL_IDS.mystmd;
 
 const behaviours = {
   ...B.commonBehaviours(profile),
@@ -368,6 +428,17 @@ if (process.env.GITHUB_ACTIONS === "true" && resolve(process.argv[1] ?? "") === 
 
 export default {
   side: "mystmd",
+  // the metrics' theme facts (D19): the content root, the body text inside it, and where a surface's key sits
+  content: profile.text,
+  bodyText: profile.body,
+  // KaTeX draws its glyphs as text, so no element's generated content is read for them; its MathML copy, clipped to
+  // 1px, is hidden text the metrics leave out
+  glyphs: null,
+  // a heading's number, which the theme writes in a span of its own before the heading's text, left out of its
+  // dominant text: a heading reads as its own text however short
+  textSkip: ":is(h1, h2, h3, h4, h5, h6) > span.select-none",
+  sourceOf,
+  labelIds,
   repository: "QuantEcon/test-lecture-theme-mystmd",
   basePath: "/test-lecture-theme-mystmd/",
   publishedBase: "https://quantecon.github.io/test-lecture-theme-mystmd/",

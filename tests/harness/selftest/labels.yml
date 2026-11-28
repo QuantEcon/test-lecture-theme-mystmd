@@ -1,0 +1,7 @@
+# The fixture pages' source labels: what visual.mjs's sourceLabels reads from a real page's MyST source
+# (lectures/<page>.md), here for the pages of good/ and bad/, which have none. A key takes an id as a label only where
+# its page has it, so the citation's generated id, the cells' and the second display's give no key. The same file in
+# both corpora.
+typography: [typography, lists, selftest-ex-1, selftest_sol_1, selftest_tbl_1]
+code_cells: [code_cells]
+math: [math, mean]

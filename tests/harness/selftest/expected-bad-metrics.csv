@@ -1,0 +1,13 @@
+page,family,viewport,scheme,n,key,width,height,column,overflow,text,font_size,line_height,body_font_size,body_line_height,colour,background,contrast,crop,sha256
+code_cells,code-cell,desktop,light,1,code:ffc472cb52ec,800,120,,0,code,16,normal,,,#000000,#ffffff,21.00,,
+code_cells,heading-h1,desktop,light,1,heading:4c7dac44c91e,800,40,,0,h1,32,40,,,#000000,#ffffff,21.00,,
+code_cells,code-cell,desktop,dark,1,code:ffc472cb52ec,800,120,,0,code,16,normal,,,#dddddd,#1c1917,12.88,,
+code_cells,heading-h1,desktop,dark,1,heading:4c7dac44c91e,800,40,,0,h1,32,40,,,#dddddd,#1c1917,12.88,,
+code_cells,code-cell,tablet,light,1,code:ffc472cb52ec,800,120,,0,code,16,normal,,,#000000,#ffffff,21.00,,
+code_cells,heading-h1,tablet,light,1,heading:4c7dac44c91e,800,40,,0,h1,32,40,,,#000000,#ffffff,21.00,,
+code_cells,code-cell,tablet,dark,1,code:ffc472cb52ec,800,120,,0,code,16,normal,,,#dddddd,#1c1917,12.88,,
+code_cells,heading-h1,tablet,dark,1,heading:4c7dac44c91e,800,40,,0,h1,32,40,,,#dddddd,#1c1917,12.88,,
+code_cells,code-cell,phone,light,1,code:ffc472cb52ec,390,120,,0,code,16,normal,,,#000000,#ffffff,21.00,,
+code_cells,heading-h1,phone,light,1,heading:4c7dac44c91e,390,40,,0,h1,32,40,,,#000000,#ffffff,21.00,,
+code_cells,code-cell,phone,dark,1,code:ffc472cb52ec,390,120,,0,code,16,normal,,,#dddddd,#1c1917,12.88,,
+code_cells,heading-h1,phone,dark,1,heading:4c7dac44c91e,390,40,,0,h1,32,40,,,#dddddd,#1c1917,12.88,,

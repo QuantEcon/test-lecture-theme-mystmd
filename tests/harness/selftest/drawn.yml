@@ -1,16 +1,28 @@
-# The self-test's drawn table: the format of ../drawn.yml, with six of its entries. Four carry this site's real
-# selector, so the fixtures in good/ and bad/ are counted as the real pages are; `math-inline` is null, as it is
-# there, so the self-test sees a family that writes no rows; and `figure` is given a selector the browser cannot
-# parse, so its count is never taken: empty on every page, and run.mjs exits 1. Between them, on the fixtures:
-#   code-cell           good code-cells, two cells, both shown (the theme's id-less toolbar block inside the first
-#                       left out); bad code-cells, one
-#   cell-output         good code-cells, an output inside a closed dropdown: drawn 1, shown 0 (the first cell's empty
-#                       outputs container left out)
+# The self-test's drawn table: the format of ../drawn.yml, with eleven of its entries. Nine carry this site's real
+# selector, so the fixtures in good/ and bad/ are counted, and measured, as the real pages are; `math-inline` is null,
+# as it is there, so the self-test sees a family that writes no rows; and `figure` is given a selector the browser
+# cannot parse, so its count is never taken: empty on every page, no metrics, and run.mjs exits 1. Between them, on
+# the fixtures:
+#   code-cell           good code-cells, four cells (the first has the theme's id-less toolbar block, which the
+#                       selector leaves out, and is wider inside than its box; the fourth's block is inside its
+#                       hide-cell fold, so drawn and not shown); bad code-cells, one, on a page with no body text
+#   cell-output         good code-cells, the first cell's outputs container is empty (not counted), the second's
+#                       output is inside a closed dropdown (drawn, not shown), the third's shows no text (drawn 2,
+#                       shown 1: its metrics row is n 2)
+#   tag-hide-cell       good code-cells, the fourth cell's fold, keyed by the code of the block it holds
 #   solution            {select, in, text}: good typography, the text filter keeps the solution's box and drops the
-#                       exercise's; bad typography, a solution hidden by a style: drawn 1, shown 0
-#   cite-parenthetical  good typography, one of two citations
-# Every page where nothing matches is a row of 0; bad's missing page (long_cells) and its intro in dark, whose
-# scheme does not take effect, are empty. The counts are compared with expected-<site>-counts.csv.
+#                       exercise's, and the solution sits on a translucent background, keyed by its label; bad
+#                       typography, one hidden by a style: drawn 1, shown 0
+#   cite-parenthetical  good typography, the parenthetical citation (inside the solution) and not the narrative one;
+#                       it has no key, so it pairs by n
+#   math-display        good math, two displays as KaTeX renders them, keyed by the TeX in their annotations
+#   heading-h1          the page titles of good typography and code-cells and bad code-cells, and good intro's
+#                       book title, which stands for a first page's title
+#   heading-h2          good typography, a heading whose two styles tie, and one with inline maths
+#   table               none on the fixtures: run.mjs's forced-fault run adds a bordered one
+# Every page where nothing matches is a row of 0; bad's missing page (long-cells) and its intro in dark, whose
+# scheme does not take effect, are empty. The counts are compared with expected-<site>-counts.csv, and the metrics
+# of every surface shown with expected-<site>-metrics.csv. The labels a key may take are selftest/labels.yml's.
 source:
   repository: QuantEcon/project-theme-parity
   path: bin/drawn.yml
@@ -21,6 +33,8 @@ families:
     selector: "article div.myst-jp-nb-block[id]"
   - id: cell-output
     selector: 'article div[data-name="outputs-container"]:has(> *)'
+  - id: tag-hide-cell
+    selector: "article details.myst-dropdown:has(> .myst-dropdown-body > .myst-jp-nb-block)"
   - id: solution
     selector:
       select: "article .myst-exercise"
@@ -28,6 +42,14 @@ families:
       text: "^Solution\\b"
   - id: cite-parenthetical
     selector: "article span.cite-group.parenthetical"
+  - id: math-display
+    selector: "article .katex-display"
+  - id: heading-h1
+    selector: 'article h1, article:not(:has(h1)) [aria-label="Book title"]'
+  - id: heading-h2
+    selector: "article h2:has(> span.select-none)"
+  - id: table
+    selector: 'article table:not([data-name="outputs-container"] *)'
   - id: math-inline
     selector: null
     why: inline-maths
