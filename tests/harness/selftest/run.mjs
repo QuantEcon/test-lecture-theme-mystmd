@@ -313,9 +313,15 @@ async function unitChecks() {
   eq("labels: this theme's ids for a label with a leading digit, a non-ASCII letter, a footnote's, a display's, a stroked letter and an apostrophe, and none where either stack gives two labels one id",
     ids.map((id) => surfaceKey({ label: id }, T)),
     ["label:c6e87017b838", "label:d353a2671b67", "", "", "", "label:85e3ec00075a", "label:5e77fb9063c8", "label:1944e7a1f23c", "label:61b87354d033", "label:24ceef1cb6b0"]);
-  const U = labelSites(["Gr\u00f6\u00dfe", "Gr\u00fc\u00dfe", "it's", "its"], theme.labelIds);
-  eq("labels: two labels one stack alone gives one id key on neither stack", (theme.side === "sphinx" ? ["grosze", "grusze", "it-s", "its"] : ["gr-e", "its"]).map((id) => surfaceKey({ label: id }, U)),
-    theme.side === "sphinx" ? ["", "", "", ""] : ["", ""]);
+  // pairs of labels that one stack alone gives one id, by each of its rules (mystmd: the html id's dropped
+  // characters, quotes, `id-`; Sphinx: make_id's digraphs, stroked letters, accents folded to ASCII, a display's
+  // `equation-`): no id of either keys, on this stack too
+  const U = labelSites(["Gr\u00f6\u00dfe", "Gr\u00fc\u00dfe", "it's", "its", "2d", "id-2d", "Ma\u00dfe", "masze", "\u0141a", "la", "caf\u00e9", "cafe", "x1", "equation-x1"], theme.labelIds);
+  eq("labels: labels one stack alone gives one id key on neither stack", [...U.keys()], []);
+  // and a display label with a leading digit, whose id is make_id of `equation-` and the label, not `equation-` and
+  // make_id of the label (which would be another label's)
+  const V = labelSites(["1st-order", "equation-st-order"], theme.labelIds);
+  eq("labels: a display label with a leading digit takes no other label's id", [...new Set(V.values())].sort(), ["1st-order", "equation-st-order"]);
   eq("labels: a MyST page's targets, :label: and :name:, a directive's YAML options, equation labels, \\label and footnotes, not its front matter",
     [...labelsIn("---\nkernelspec:\n  name: python3\n---\n(Sec_One)=\n# Head\n:label: Short_Path_Ex1\n:name: \"flow_fig\"\n$$\nx \\label{a:y0}\n$$ (eq:cagan_demand)\n[^footnote-1]: x\nnot a (label)= here\n"
       + "```{code-cell} ipython3\n---\nmystnb:\n  figure:\n    name: fig-random-walk\ntags: [hide-input]\n---\nx = 1\n```\n:::{figure} a.png\n---\nname: \"fig-b\"\n---\n:::\n"
