@@ -266,7 +266,8 @@ body{margin:0;font:16px sans-serif;color:#000000;background:#ffffff} .s{display:
 <div class="s" id="size" style="font-size:16px;line-height:20px"><span style="font-size:20px;line-height:30px">abc</span></div>
 <p><span id="inline">abc</span></p>
 <div style="background:#000080"><div style="background:rgba(255,255,255,0.5)"><div class="s" id="bg"><span style="color:#ffffff">abc</span></div></div></div>
-<div class="s n">one</div><div class="s n" style="display:none">two</div><div class="s n">three</div>
+<div class="s n">one</div><div class="s n" style="display:none">two</div><div class="s n">three</div><div class="s n">four</div><div class="s n">five</div>
+<div class="s" id="colour"><span style="color:#111111">abcd</span><span style="color:#222222">efg</span><span style="color:#222222">hij</span></div>
 <main id="u-root" style="width:600px"><p class="b" style="width:400px;font-size:17px;line-height:25px">first</p><p class="b" style="width:300px;font-size:13px">second</p></main>
 <div id="box-label"><p class="s u-own">in a labelled box</p></div>
 <div class="math" id="equation-q"><mjx-container class="u-mjx" jax="CHTML" display="true" style="display:block;height:20px">q</mjx-container></div>
@@ -301,10 +302,10 @@ async function unitChecks() {
   eq("key: code before heading, and heading before label", [surfaceKey({ code: "y", heading: "z", label: "equation-eq-cagan-demand" }, L), surfaceKey({ heading: "z", label: "equation-eq-cagan-demand" }, L)], ["code:a1fce4363854", "heading:594e519ae499"]);
   eq("key: a source empty once normalised gives way to the next", [surfaceKey({ code: " \n ", label: "equation-eq-cagan-demand" }, L), surfaceKey({ tex: "\\, ~", heading: "Lists" })], ["label:5e77fb9063c8", "heading:4c14c4a453f9"]);
   // this theme's ids for a label, and an id two labels take: the same key on both stacks, and none where it is not sure
-  const T = labelSites(["2d-plot", "Gr\u00f6\u00dfe", "10-step", "step", "a_b", "a-b", "Note_1"], theme.labelIds);
-  const ids = theme.side === "sphinx" ? ["d-plot", "grosze", "step", "10-step", "a-b", "note-1"] : ["id-2d-plot", "gr-e", "step", "id-10-step", "a-b", "note_1"];
-  eq("labels: this theme's ids for a label with a leading digit, a non-ASCII letter, a footnote's, and an id two labels take", ids.map((id) => surfaceKey({ label: id }, T)),
-    ["label:c6e87017b838", "label:d353a2671b67", theme.side === "sphinx" ? "" : "label:3e64cc41cf8e", "label:7a0a7b4a048d", "", "label:85e3ec00075a"]);
+  const T = labelSites(["2d-plot", "Gr\u00f6\u00dfe", "10-step", "step", "a_b", "a-b", "Note_1", "eq:cagan_demand"], theme.labelIds);
+  const ids = theme.side === "sphinx" ? ["d-plot", "grosze", "step", "10-step", "a-b", "note-1", "equation-eq-cagan-demand"] : ["id-2d-plot", "gr-e", "step", "id-10-step", "a-b", "note_1", "eq-cagan-demand"];
+  eq("labels: this theme's ids for a label with a leading digit, a non-ASCII letter, a footnote's, a display's, and an id two labels take", ids.map((id) => surfaceKey({ label: id }, T)),
+    ["label:c6e87017b838", "label:d353a2671b67", theme.side === "sphinx" ? "" : "label:3e64cc41cf8e", "label:7a0a7b4a048d", "", "label:85e3ec00075a", "label:5e77fb9063c8"]);
   eq("labels: a MyST page's targets, :label: and :name:, a directive's YAML options, equation labels, \\label and footnotes, not its front matter",
     [...labelsIn("---\nkernelspec:\n  name: python3\n---\n(Sec_One)=\n# Head\n:label: Short_Path_Ex1\n:name: \"flow_fig\"\n$$\nx \\label{a:y0}\n$$ (eq:cagan_demand)\n[^footnote-1]: x\nnot a (label)= here\n"
       + "```{code-cell} ipython3\n---\nmystnb:\n  figure:\n    name: fig-random-walk\ntags: [hide-input]\n---\nx = 1\n```\n:::{figure} a.png\n---\nname: \"fig-b\"\n---\n:::\n")].sort(),
@@ -354,7 +355,7 @@ async function unitChecks() {
     eq("measure: an inline box has no overflow to read", pick(await one("#inline"), ["overflow"]), { overflow: "" });
     eq("measure: translucent backgrounds composited in order over the first opaque one", pick(await one("#bg"), ["colour", "background", "contrast"]), { colour: "#ffffff", background: "#8080c0", contrast: "3.64" });
     const n = await measureDrawn(page, ".n", UNIT_THEME);
-    eq("measure: n is the place among the drawn matches, and only the shown are measured", { drawn: n.drawn, shown: n.shown, n: n.surfaces.map((x) => x.n) }, { drawn: 3, shown: 2, n: [1, 3] });
+    eq("measure: n is the place among the drawn matches, and only the shown are measured", { drawn: n.drawn, shown: n.shown, n: n.surfaces.map((x) => x.n) }, { drawn: 5, shown: 4, n: [1, 3, 4, 5] });
     eq("body text: the first shown match, its width the column", await bodyText(page, { content: "#u-root", bodyText: "p.b" }), { body_font_size: 17, body_line_height: 25, column: 400 });
     // the theme's own label sites, on markup in its own form
     const label = async (sel) => (await measureDrawn(page, sel, theme)).surfaces[0]?.source?.label ?? null;
@@ -364,7 +365,7 @@ async function unitChecks() {
       eq("theme: a display's label is on the block mystmd draws round it", await label(".u-katex"), "q");
       eq("theme: a footnote's label, without the fn- mystmd writes before it", await label("#fn-note-1"), "note-1");
     }
-    eq("measure: a style is its colour, size, family and weight", pick(await one("#weight"), ["colour"]), { colour: "#222222" });
+    eq("measure: a style is its colour, size, family and weight", [pick(await one("#weight"), ["colour"]), pick(await one("#colour"), ["colour"])], [{ colour: "#222222" }, { colour: "#222222" }]);
     eq("measure: a clip-path's four insets: half left is shown, none left is hidden, as is a fixed box clipped to nothing", [pick(await one("#half"), ["colour"]), pick(await one("#gone"), ["colour"])], [{ colour: "#a60000" }, { colour: "#111111" }]);
     eq("measure: the dominant text read on the element that draws the most of it, not its section number", pick(await one("#most"), ["text"]), { text: "h2" });
     const titles = (await measureDrawn(page, theme.side === "sphinx" ? ".u-h1s" : ".u-h1m", theme)).surfaces.map((x) => x.source?.heading?.trim());
@@ -596,14 +597,22 @@ async function fontCheck(goodDir, base) {
   try {
     const bin = join(work, "bin"), installedFile = join(work, "selftest-sans.ttf");
     await mkdir(bin);
-    await writeFile(join(bin, "fc-list"), "#!/bin/sh\nprintf '%s\\tSelftest Sans\\tBook\\t%s\\n' \"$HARNESS_SELFTEST_FONTFILE\" \"$HARNESS_SELFTEST_FONTVERSION\"\nprintf '%s\\tSelftest Gone\\tBook\\t1.000\\n' \"$HARNESS_SELFTEST_FONTFILE.gone\"\n");
+    // a stand-in fc-list that writes what --format asks for, as fc-list does: so a field not asked for is not there
+    await writeFile(join(bin, "fc-list"), [
+      "#!/bin/sh", '[ "$1" = "--format" ] || exit 2', 'fmt="$2"',
+      'for font in "$HARNESS_SELFTEST_FONTFILE|Selftest Sans|$HARNESS_SELFTEST_FONTVERSION" "$HARNESS_SELFTEST_FONTFILE.gone|Selftest Gone|1.000"; do',
+      '  file=${font%%|*}; rest=${font#*|}; family=${rest%%|*}; version=${rest#*|}',
+      '  printf "$(printf \'%s\' "$fmt" | sed -e "s|%{file}|$file|g" -e "s|%{family}|$family|g" -e "s|%{style}|Book|g" -e "s|%{fontversion}|$version|g")"',
+      "done", ""].join("\n"));
     await chmod(join(bin, "fc-list"), 0o755);
     const dir = join(work, "site");
     const file = await siteCopy(goodDir, dir, DRAWN_PAGE);
     await mkdir(join(dir, "fonts"));
     const frame = (f) => `<!doctype html><html><head><meta charset="utf-8"><style>@font-face{font-family:SelftestFrame;src:url(${base}fonts/${f}.woff2)}</style></head><body><p style="font-family:SelftestFrame">a frame's text</p></body></html>`;
     const main = theme.side === "sphinx" ? "</section></main>" : "</main></article>";
-    await writeFile(file, (await readFile(file, "utf8")).replace(main, `<style>@font-face{font-family:SelftestWeb;src:url(${base}fonts/main.woff2)}</style><p style="font-family:SelftestWeb">text in the site's web font</p><iframe src="${base}frame.html" style="width:200px;height:60px"></iframe>${main}`));
+    await mkdir(join(dir, "fonts", "moved"));
+    await writeFile(join(dir, "fonts", "moved", "index.html"), "not a font: moved");
+    await writeFile(file, (await readFile(file, "utf8")).replace(main, `<style>@font-face{font-family:SelftestWeb;src:url(${base}fonts/main.woff2)}@font-face{font-family:SelftestMoved;src:url(${base}fonts/moved)}</style><p style="font-family:SelftestWeb">text in the site's web font</p><p style="font-family:SelftestMoved">text in a font whose address answers 301</p><iframe src="${base}frame.html" style="width:200px;height:60px"></iframe>${main}`));
     const table = await quietTable(work);
     let i = 0;
     const once = async ({ version = "1.000", frameFont = "frame-a", site = "main-1", installed = "installed-1" } = {}) => {
@@ -617,8 +626,9 @@ async function fontCheck(goodDir, base) {
         quietEnv({ PATH: `${bin}${delimiter}${process.env.PATH}`, HARNESS_SELFTEST_FONTVERSION: version, HARNESS_SELFTEST_FONTFILE: installedFile }));
       if (r.status !== 0) problems.push(`fonts, run ${i}: expected exit 0, got ${r.status} (${lastLine(r)})`);
       const prov = await provenanceOf(out);
-      if (i === 1 && (prov?.metrics?.faults ?? []).filter((f) => f.kind === "fonts" && /installed font file\(s\) could not be read/.test(f.why)).length !== 1)
-        problems.push(`fonts: expected the installed font file that cannot be read to be a fonts problem, got ${JSON.stringify((prov?.metrics?.faults ?? []).filter((f) => f.kind === "fonts")).slice(0, 200)}`);
+      const fonts = (prov?.metrics?.faults ?? []).filter((f) => f.kind === "fonts");
+      if (i === 1 && (fonts.filter((f) => /installed font file\(s\) could not be read/.test(f.why)).length !== 1 || fonts.filter((f) => /fonts\/moved is listed by its address, not its bytes/.test(f.why)).length !== 6))
+        problems.push(`fonts: expected the installed font file that cannot be read, and the font whose answer is a redirect in each reading, to be fonts problems, got ${JSON.stringify(fonts.map((f) => f.why)).slice(0, 300)}`);
       return prov?.environment?.fonts ?? null;
     };
     const one = await once(), version = await once({ version: "2.000" }), framed = await once({ frameFont: "frame-b" }), site = await once({ site: "main-2" }), bytes = await once({ installed: "installed-2" });
