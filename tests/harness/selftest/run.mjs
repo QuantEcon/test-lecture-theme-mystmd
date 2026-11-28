@@ -301,10 +301,10 @@ async function unitChecks() {
   eq("key: code before heading, and heading before label", [surfaceKey({ code: "y", heading: "z", label: "equation-eq-cagan-demand" }, L), surfaceKey({ heading: "z", label: "equation-eq-cagan-demand" }, L)], ["code:a1fce4363854", "heading:594e519ae499"]);
   eq("key: a source empty once normalised gives way to the next", [surfaceKey({ code: " \n ", label: "equation-eq-cagan-demand" }, L), surfaceKey({ tex: "\\, ~", heading: "Lists" })], ["label:5e77fb9063c8", "heading:4c14c4a453f9"]);
   // this theme's ids for a label, and an id two labels take: the same key on both stacks, and none where it is not sure
-  const T = labelSites(["2d-plot", "Gr\u00f6\u00dfe", "10-step", "step"], theme.labelIds);
-  const ids = theme.side === "sphinx" ? ["d-plot", "grosze", "step", "10-step"] : ["id-2d-plot", "gr-e", "step", "id-10-step"];
-  eq("labels: this theme's ids for a label with a leading digit, a non-ASCII letter, and one id two labels take", ids.map((id) => surfaceKey({ label: id }, T)),
-    ["label:c6e87017b838", "label:d353a2671b67", theme.side === "sphinx" ? "" : "label:3e64cc41cf8e", "label:7a0a7b4a048d"]);
+  const T = labelSites(["2d-plot", "Gr\u00f6\u00dfe", "10-step", "step", "a_b", "a-b", "Note_1"], theme.labelIds);
+  const ids = theme.side === "sphinx" ? ["d-plot", "grosze", "step", "10-step", "a-b", "note-1"] : ["id-2d-plot", "gr-e", "step", "id-10-step", "a-b", "note_1"];
+  eq("labels: this theme's ids for a label with a leading digit, a non-ASCII letter, a footnote's, and an id two labels take", ids.map((id) => surfaceKey({ label: id }, T)),
+    ["label:c6e87017b838", "label:d353a2671b67", theme.side === "sphinx" ? "" : "label:3e64cc41cf8e", "label:7a0a7b4a048d", "", "label:85e3ec00075a"]);
   eq("labels: a MyST page's targets, :label: and :name:, a directive's YAML options, equation labels, \\label and footnotes, not its front matter",
     [...labelsIn("---\nkernelspec:\n  name: python3\n---\n(Sec_One)=\n# Head\n:label: Short_Path_Ex1\n:name: \"flow_fig\"\n$$\nx \\label{a:y0}\n$$ (eq:cagan_demand)\n[^footnote-1]: x\nnot a (label)= here\n"
       + "```{code-cell} ipython3\n---\nmystnb:\n  figure:\n    name: fig-random-walk\ntags: [hide-input]\n---\nx = 1\n```\n:::{figure} a.png\n---\nname: \"fig-b\"\n---\n:::\n")].sort(),
@@ -596,7 +596,7 @@ async function fontCheck(goodDir, base) {
   try {
     const bin = join(work, "bin"), installedFile = join(work, "selftest-sans.ttf");
     await mkdir(bin);
-    await writeFile(join(bin, "fc-list"), "#!/bin/sh\nprintf '%s\\tSelftest Sans\\tBook\\t%s\\n' \"$HARNESS_SELFTEST_FONTFILE\" \"$HARNESS_SELFTEST_FONTVERSION\"\n");
+    await writeFile(join(bin, "fc-list"), "#!/bin/sh\nprintf '%s\\tSelftest Sans\\tBook\\t%s\\n' \"$HARNESS_SELFTEST_FONTFILE\" \"$HARNESS_SELFTEST_FONTVERSION\"\nprintf '%s\\tSelftest Gone\\tBook\\t1.000\\n' \"$HARNESS_SELFTEST_FONTFILE.gone\"\n");
     await chmod(join(bin, "fc-list"), 0o755);
     const dir = join(work, "site");
     const file = await siteCopy(goodDir, dir, DRAWN_PAGE);
@@ -616,12 +616,15 @@ async function fontCheck(goodDir, base) {
         "--only", "header-title", "--pages", DRAWN_PAGE, "--quiet", "--out", out],
         quietEnv({ PATH: `${bin}${delimiter}${process.env.PATH}`, HARNESS_SELFTEST_FONTVERSION: version, HARNESS_SELFTEST_FONTFILE: installedFile }));
       if (r.status !== 0) problems.push(`fonts, run ${i}: expected exit 0, got ${r.status} (${lastLine(r)})`);
-      return (await provenanceOf(out))?.environment?.fonts ?? null;
+      const prov = await provenanceOf(out);
+      if (i === 1 && (prov?.metrics?.faults ?? []).filter((f) => f.kind === "fonts" && /installed font file\(s\) could not be read/.test(f.why)).length !== 1)
+        problems.push(`fonts: expected the installed font file that cannot be read to be a fonts problem, got ${JSON.stringify((prov?.metrics?.faults ?? []).filter((f) => f.kind === "fonts")).slice(0, 200)}`);
+      return prov?.environment?.fonts ?? null;
     };
     const one = await once(), version = await once({ version: "2.000" }), framed = await once({ frameFont: "frame-b" }), site = await once({ site: "main-2" }), bytes = await once({ installed: "installed-2" });
     if (![one, version, framed, site, bytes].every(Boolean)) problems.push("fonts: expected environment.fonts in each run's provenance.json");
     else {
-      if (one.installed?.count !== 1 || one.installed?.files !== 1 || one.installed?.unread !== 0) problems.push(`fonts: expected the stand-in fc-list's one font, its file read, got ${JSON.stringify(one.installed)}`);
+      if (one.installed?.count !== 2 || one.installed?.files !== 2 || one.installed?.unread !== 1) problems.push(`fonts: expected the stand-in fc-list's two fonts, one file read and one not, got ${JSON.stringify(one.installed)}`);
       if (one.fingerprint === version.fingerprint) problems.push("fonts: the installed font's version moved, and the fingerprint did not");
       if (one.fingerprint !== framed.fingerprint) problems.push("fonts: only the frame's font and the port moved, and the fingerprint did too");
       if (one.fingerprint === site.fingerprint) problems.push("fonts: the site's font file's bytes moved at the same address, and the fingerprint did not");
