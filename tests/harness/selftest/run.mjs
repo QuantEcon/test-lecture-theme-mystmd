@@ -39,14 +39,18 @@
 // numbers on one stack and not the other, and a cell folded whole: the same on both), headings (a page title, the
 // book's title on mystmd's first page), a label from the page's source (selftest/labels.yml), and none (pairing
 // falls back to `n`), where a generated id and a labelled box round the surface give none. Then the unit cases: the
-// key's rules, the labels a page's source gives, the tie check's failure path, the fingerprint, and the measures on a
-// small page of their own, each pinned. Then run.mjs is run on each build of the good site with that table, on one
+// key's rules, the theme's ids for a label, the labels a page's source gives and a source missing or unreadable, the
+// tie check's failure path, the fingerprint, the writer's rules, the maths engines, and the measures on a small page
+// of their own, each pinned. Then run.mjs is run on each build of the good site with that table, on one
 // page: it must write the same counts and metrics, record the selector that threw in provenance.json (schema 3), and
 // exit 1 for it; with --no-metrics it must write the same counts and no metrics.csv; and its run without page-wide
-// checks must write neither counts.csv nor metrics.csv. Last, run.mjs is run, as in GitHub Actions, on a build of the
-// good site whose body text is forced not to be read: a problem with the metrics warns and never fails the run
-// (QuantEcon/project-theme-parity#80), so it must exit 0, print the "Style metrics problems" warning, and record the
-// fault in provenance.json. The self-test itself fails on any metrics mismatch, as on any other.
+// checks must write neither counts.csv nor metrics.csv. Last, run.mjs is run four more ways (faultCheck, envCheck,
+// lecturesCheck, fontCheck): with a problem of each kind a page reading can have forced on the good site; with a
+// labels file that does not parse, no fc-list and a metrics.csv that cannot be written; without --labels, from a
+// lectures/ with a source that cannot be read; and five times for the fingerprint. A problem with the metrics warns
+// and never fails the run (QuantEcon/project-theme-parity#80), so each must exit 0 (or 1 for the selector that
+// throws), print the "Style metrics problems" warning, and record its faults in provenance.json. The self-test itself
+// fails on any metrics mismatch, as on any other.
 //
 // Exit 1 on any mismatch, so the job fails before the real run. In GitHub Actions each site's mismatches are also an
 // ::error:: annotation, so the run's annotations say what CI read.
@@ -64,7 +68,7 @@ import YAML from "yaml";
 import { serve } from "../lib/server.mjs";
 import { oneLine } from "../lib/util.mjs";
 import { readDrawn, readTable } from "../lib/table.mjs";
-import { bodyText, fingerprint, keyOf as surfaceKey, labelsIn, measureDrawn, renderedFonts, tieOf } from "../lib/visual.mjs";
+import { bodyText, fingerprint, keyOf as surfaceKey, labelSites, labelsIn, mathsEngines, measureDrawn, renderedFonts, sourceLabels, tieOf } from "../lib/visual.mjs";
 import theme from "../theme.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -272,6 +276,11 @@ body{margin:0;font:16px sans-serif;color:#000000;background:#ffffff} .s{display:
 <div id="frac" style="width:100.125px;height:20.5px">frac</div>
 <div class="cell u-noinput s"><div class="cell_output"><div class="highlight"><pre>out()</pre></div></div></div>
 <div id="u-cell" class="myst-jp-nb-block s"><div data-name="outputs-container"><div class="myst-code"><pre><code>out()</code></pre></div></div></div>
+<div class="s" id="half"><span style="color:#111111">abc</span><span style="display:inline-block;clip-path:inset(50% 0 0 0);color:#a60000">abcdefgh</span></div>
+<div class="s" id="gone"><span style="color:#111111">abc</span><span style="display:inline-block;clip-path:inset(0 0 100% 0);color:#a70000">abcdefgh</span><span style="position:fixed;clip:rect(1px,1px,1px,1px);color:#a80000">abcdefgh</span></div>
+<h2 class="s" id="most" style="font-size:16px;font-weight:400;color:#000000"><span class="section-number">2.</span>Lists of things</h2>
+<h1 class="u-h1s"><span class="section-number">2. </span>Lists<a class="headerlink" href="#">#</a></h1><h1 class="u-h1s">2. Lists</h1>
+<h1 class="u-h1m">2<!-- -->. <!-- -->Lists<a class="select-none" aria-label="Link to this Section" href="#">¶</a></h1><h1 class="u-h1m">2. Lists</h1>
 </body></html>`;
 const UNIT_THEME = { content: "body", glyphs: "i-g", sourceOf: function sourceOf() { return {}; } };
 const THROWING_THEME = { content: "body", glyphs: null, sourceOf: function sourceOf() { throw new Error("a source that throws, deliberately"); } };
@@ -280,20 +289,37 @@ async function unitChecks() {
   const problems = [];
   const eq = (what, got, want) => { if (JSON.stringify(got) !== JSON.stringify(want)) problems.push(`${what}: expected ${JSON.stringify(want)}, got ${JSON.stringify(got)}`); };
   // the key's rules
-  const L = new Set(["eq-cagan-demand"]);
+  const L = labelSites(["Eq:Cagan_Demand"], () => ["equation-eq-cagan-demand"]);
   eq("key: TeX with its wrappers, spacing, \\tag, \\label and \\nonumber, as Sphinx writes it", surfaceKey({ tex: "\\begin{split}\\begin{aligned} ab \\,&= \\bar{c} \\\\ c &= d\\:e \\tag{1}\\label{eq:x}\\nonumber \\end{aligned}\\end{split}" }), "tex:be2a7fa15430");
   eq("key: the same TeX as mystmd writes it", surfaceKey({ tex: "\\begin{aligned} ab &= \\bar{c} \\\\\nc &= d~e \\end{aligned}" }), "tex:be2a7fa15430");
   eq("key: TeX without the line break is other TeX", surfaceKey({ tex: "ab &= \\bar{c} c &= de" }), "tex:dfc0b224d309");
   eq("key: code, its whitespace removed", [surfaceKey({ code: "import numpy as np\n  x = 1\n" }), surfaceKey({ code: "import numpy as np x=1" })], ["code:9b8d047c8724", "code:9b8d047c8724"]);
   eq("key: a heading, its whitespace removed and lower-cased", [surfaceKey({ heading: "Lists ab12c" }), surfaceKey({ heading: " LISTS  AB12C " })], ["heading:6aebc406e6d3", "heading:6aebc406e6d3"]);
   eq("key: a heading's inline maths, its TeX normalised as TeX is, and other than the same text", [surfaceKey({ heading: "Sums over \uE000x_i\\,\uE001" }), surfaceKey({ heading: "Sums over \uE000x_i\uE001" }), surfaceKey({ heading: "Sums over x_i" })], ["heading:29a94ab19d24", "heading:29a94ab19d24", "heading:6f33d42a3850"]);
-  eq("key: a label, normalised, and only one the page's source has", [surfaceKey({ label: "equation-Eq:Cagan_Demand" }, L), surfaceKey({ label: "id1" }, L), surfaceKey({ label: "eq-cagan-demand" })], ["label:9de743c9815c", "", ""]);
-  eq("key: TeX before code, heading and label", surfaceKey({ tex: "x", code: "y", heading: "z", label: "eq-cagan-demand" }, L), "tex:2d711642b726");
-  eq("key: code before heading, and heading before label", [surfaceKey({ code: "y", heading: "z", label: "eq-cagan-demand" }, L), surfaceKey({ heading: "z", label: "eq-cagan-demand" }, L)], ["code:a1fce4363854", "heading:594e519ae499"]);
-  eq("key: a source empty once normalised gives way to the next", [surfaceKey({ code: " \n ", label: "eq-cagan-demand" }, L), surfaceKey({ tex: "\\, ~", heading: "Lists" })], ["label:9de743c9815c", "heading:4c14c4a453f9"]);
-  eq("labels: a MyST page's targets, :label: and :name:, equation labels, \\label and footnotes",
-    [...labelsIn("(Sec_One)=\n# Head\n:label: Short_Path_Ex1\n:name: \"flow_fig\"\n$$\nx \\label{a:y0}\n$$ (eq:cagan_demand)\n[^footnote-1]: x\nnot a (label)= here")].sort(),
-    ["a-y0", "eq-cagan-demand", "flow-fig", "footnote-1", "sec-one", "short-path-ex1"]);
+  eq("key: a label: the source label its site's id stands for, and only an id one of the page's source labels takes", [surfaceKey({ label: "equation-eq-cagan-demand" }, L), surfaceKey({ label: "id1" }, L), surfaceKey({ label: "equation-eq-cagan-demand" })], ["label:5e77fb9063c8", "", ""]);
+  eq("key: TeX before code, heading and label", surfaceKey({ tex: "x", code: "y", heading: "z", label: "equation-eq-cagan-demand" }, L), "tex:2d711642b726");
+  eq("key: code before heading, and heading before label", [surfaceKey({ code: "y", heading: "z", label: "equation-eq-cagan-demand" }, L), surfaceKey({ heading: "z", label: "equation-eq-cagan-demand" }, L)], ["code:a1fce4363854", "heading:594e519ae499"]);
+  eq("key: a source empty once normalised gives way to the next", [surfaceKey({ code: " \n ", label: "equation-eq-cagan-demand" }, L), surfaceKey({ tex: "\\, ~", heading: "Lists" })], ["label:5e77fb9063c8", "heading:4c14c4a453f9"]);
+  // this theme's ids for a label, and an id two labels take: the same key on both stacks, and none where it is not sure
+  const T = labelSites(["2d-plot", "Gr\u00f6\u00dfe", "10-step", "step"], theme.labelIds);
+  const ids = theme.side === "sphinx" ? ["d-plot", "grosze", "step", "10-step"] : ["id-2d-plot", "gr-e", "step", "id-10-step"];
+  eq("labels: this theme's ids for a label with a leading digit, a non-ASCII letter, and one id two labels take", ids.map((id) => surfaceKey({ label: id }, T)),
+    ["label:c6e87017b838", "label:d353a2671b67", theme.side === "sphinx" ? "" : "label:3e64cc41cf8e", "label:7a0a7b4a048d"]);
+  eq("labels: a MyST page's targets, :label: and :name:, a directive's YAML options, equation labels, \\label and footnotes, not its front matter",
+    [...labelsIn("---\nkernelspec:\n  name: python3\n---\n(Sec_One)=\n# Head\n:label: Short_Path_Ex1\n:name: \"flow_fig\"\n$$\nx \\label{a:y0}\n$$ (eq:cagan_demand)\n[^footnote-1]: x\nnot a (label)= here\n"
+      + "```{code-cell} ipython3\n---\nmystnb:\n  figure:\n    name: fig-random-walk\ntags: [hide-input]\n---\nx = 1\n```\n:::{figure} a.png\n---\nname: \"fig-b\"\n---\n:::\n")].sort(),
+    ["Sec_One", "Short_Path_Ex1", "a:y0", "eq:cagan_demand", "fig-b", "fig-random-walk", "flow_fig", "footnote-1"]);
+  // a page's source: missing, or there and unreadable
+  const src = await mkdtemp(join(tmpdir(), "harness-selftest-src-"));
+  try {
+    await writeFile(join(src, "a.md"), "(top)=\n# A\n");
+    await mkdir(join(src, "b.md"));
+    const got = await sourceLabels(src, ["a", "b", "c"]);
+    eq("labels: a source that is missing, and one that is there and cannot be read", { labels: got.labels, missing: got.missing, unreadable: got.unreadable.map((u) => [u.page, /EISDIR|directory/i.test(u.why)]) },
+      { labels: { a: ["top"], b: [], c: [] }, missing: ["c"], unreadable: [["b", true]] });
+  } finally {
+    await rm(src, { recursive: true, force: true });
+  }
   // the tie check, holding and failing
   const c = (family, shown) => ({ page: "p", family, viewport: "desktop", scheme: "light", drawn: shown, shown });
   const m = (family, n) => ({ page: "p", family, viewport: "desktop", scheme: "light", n });
@@ -339,6 +365,10 @@ async function unitChecks() {
       eq("theme: a footnote's label, without the fn- mystmd writes before it", await label("#fn-note-1"), "note-1");
     }
     eq("measure: a style is its colour, size, family and weight", pick(await one("#weight"), ["colour"]), { colour: "#222222" });
+    eq("measure: a clip-path's four insets: half left is shown, none left is hidden, as is a fixed box clipped to nothing", [pick(await one("#half"), ["colour"]), pick(await one("#gone"), ["colour"])], [{ colour: "#a60000" }, { colour: "#111111" }]);
+    eq("measure: the dominant text read on the element that draws the most of it, not its section number", pick(await one("#most"), ["text"]), { text: "h2" });
+    const titles = (await measureDrawn(page, theme.side === "sphinx" ? ".u-h1s" : ".u-h1m", theme)).surfaces.map((x) => x.source?.heading?.trim());
+    eq("theme: a title's number the build wrote is not its text, and one its author wrote is", titles, ["Lists", "2. Lists"]);
     eq("measure: lengths to 1/100 px", pick(await one("#frac"), ["width", "height"]), { width: 100.13, height: 20.5 });
     let badGlyphs = null;
     try { badGlyphs = await one("#tie", { content: "body", glyphs: ":::", sourceOf: function sourceOf() { return {}; } }); } catch (e) { badGlyphs = { threw: oneLine(e.message, 80) }; }
@@ -353,6 +383,13 @@ async function unitChecks() {
     const withGlyphs = await renderedFonts(fontsPage);
     eq("fonts: the ones a glyph's ::before is drawn in are read", [...withGlyphs].some((f) => !textFonts.has(f)), true);
     await fontsPage.close();
+    // the maths engines: MathJax's version, and KaTeX's from its stylesheet
+    const engines = await browser.newPage();
+    await engines.setContent(`<style>.katex .katex-version::after{content:"0.16.33"}</style><script>window.MathJax = { version: "3.2.2" };</script>`);
+    const plain = await browser.newPage();
+    eq("maths: the engines' versions, and none where there is none", [await mathsEngines(engines), await mathsEngines(plain)], [{ mathjax: "3.2.2", katex: "0.16.33" }, { mathjax: null, katex: null }]);
+    await engines.close();
+    await plain.close();
     const thrown = await one("#tie", THROWING_THEME);
     eq("measure: a source that throws keeps the measures, and says so", { keyFault: /deliberately/.test(thrown?.keyFault ?? ""), text: thrown?.text }, { keyFault: true, text: "span" });
   } finally {
@@ -389,26 +426,42 @@ async function siteCopy(goodDir, dir, stem) {
 const runMjs = (args, env) => spawnSync(process.execPath, [join(HERE, "..", "run.mjs"), ...args], { encoding: "utf8", env });
 const quietEnv = (extra = {}) => { const env = { ...process.env, ...extra }; delete env.GITHUB_STEP_SUMMARY; if (!extra.GITHUB_ACTIONS) delete env.GITHUB_ACTIONS; return env; };
 
-// run.mjs, as in GitHub Actions, on a build of the good site whose typography page forces problems with the metrics
-// and holds two values that once stopped the writer: the content root's own querySelectorAll, which only the body
-// text's reading calls, throws (six body-text faults), and so does the solution box's scrollWidth, which only its
-// measures read (six measure faults); and a bordered table, to which Chrome gives a client width past its scroll width,
-// draws its text in an element whose tag has a `.` and a `_`, and whose computed line height is forced to a value the
-// column does not take (six more measure faults, from the writer's rules). With the drawn table less the selector that
-// throws (so no count fails the run), run.mjs must exit 0, print the "Style metrics problems" warning and the problems
-// in its summary, record the eighteen faults in provenance.json, and write every row: the solution's without its
-// measures, the table's with an overflow of 0, the odd tag and no line height, and none with body measures.
+// run.mjs, as in GitHub Actions, on a build of the good site whose typography page forces a problem of each kind a
+// page reading can have, and holds two values that once stopped the writer. The content root's own querySelectorAll,
+// which only the body text's reading calls, throws (six body-text faults); so does the solution box's scrollWidth,
+// which only its measures read (six measure faults); and a call on the Lists heading that only the theme's sourceOf
+// makes (Sphinx: cloneNode(), as the error markers' reading calls closest(); mystmd: closest()) (six key faults). The
+// page title's first checkVisibility() throws, which is the measuring evaluation's, so that family's evaluation
+// throws and its count is the plain count's (six measure faults, and six readings that do not tie). setAttribute("data-harness-text"), which only the fonts' reading calls, throws (six fonts faults). A
+// bordered table, to which Chrome gives a client width past its scroll width, draws its text in an element whose tag
+// has a `.` and a `_`, and whose computed line height is forced to a value the column does not take (six measure
+// faults, from the writer's rules). With the drawn table less the selector that throws (so no count fails the run),
+// run.mjs must exit 0, print the "Style metrics" notice, the "Style metrics problems" warning and the problems in its
+// summary, record each fault and the readings not tied in provenance.json, and write every row it measured: the
+// solution's without its measures, the Lists heading's without its key, the table's with an overflow of 0, the odd tag
+// and no line height, none for the page title, and none with body measures.
 const FAULT_BOX = theme.side === "sphinx" ? ".solution" : "#selftest-sol-1";
+const KEY_BOX = theme.side === "sphinx" ? "section#lists > h2" : "h2#lists", KEY_CALL = theme.side === "sphinx" ? "cloneNode" : "closest";
+const TITLE_BOX = theme.side === "sphinx" ? "main h1" : "article h1";
 const ODD_TAG = "x-odd.tag_1";
 const FAULT_TABLE = `<table class="docutils" border="1" style="border:2px solid #000000;border-collapse:separate;width:300px;height:40px"><tbody><tr><td><${ODD_TAG}>the text this table draws, in an element whose tag is odd</${ODD_TAG}></td></tr></tbody></table>`;
-const FAULT_SCRIPT = `<script>/* the self-test's forced problems with the metrics: the body text cannot be read, nor the solution's measures */
+const FAULT_SCRIPT = `<script>/* the self-test's forced problems with the metrics, one of each kind a page reading can have */
 document.querySelector(${JSON.stringify(theme.content)}).querySelectorAll = () => { throw new Error("a body text that cannot be read, forced by the self-test"); };
 for (const e of document.querySelectorAll(${JSON.stringify(FAULT_BOX)})) Object.defineProperty(e, "scrollWidth", { get() { throw new Error("a measure that throws, forced by the self-test"); } });
+for (const e of document.querySelectorAll(${JSON.stringify(KEY_BOX)})) e.${KEY_CALL} = () => { throw new Error("a key source that throws, forced by the self-test"); };
+for (const e of document.querySelectorAll(${JSON.stringify(TITLE_BOX)})) {
+  let once = true;
+  e.checkVisibility = function (o) { if (once) { once = false; throw new Error("a measuring evaluation that throws, forced by the self-test"); } return Element.prototype.checkVisibility.call(this, o); };
+}
+{ const set = Element.prototype.setAttribute;
+  Element.prototype.setAttribute = function (n, v) { if (n === "data-harness-text") throw new Error("a font reading that fails, forced by the self-test"); return set.call(this, n, v); }; }
 { const odd = document.querySelector(${JSON.stringify(ODD_TAG.replace(".", "\\."))}), style = window.getComputedStyle;
   window.getComputedStyle = function (e, pseudo) {
     const s = style.call(window, e, pseudo);
     return e !== odd || pseudo ? s : new Proxy(s, { get(t, k) { if (k === "lineHeight") return "forced"; const v = Reflect.get(t, k); return typeof v === "function" ? v.bind(t) : v; } });
   }; }</script>`;
+const lastLine = (r) => (r.stderr || r.stdout || "").trim().split("\n").pop();
+const provenanceOf = async (out) => JSON.parse(await readFile(join(out, "provenance.json"), "utf8").catch(() => "null"));
 async function faultCheck(goodDir, base) {
   const work = await mkdtemp(join(tmpdir(), "harness-selftest-fault-"));
   const problems = [];
@@ -420,40 +473,82 @@ async function faultCheck(goodDir, base) {
     const out = join(work, "out");
     const r = runMjs(["--dir", dir, "--base-path", base, "--table", join(HERE, "locators.yml"), "--drawn", await quietTable(work), "--labels", join(HERE, "labels.yml"),
       "--only", "header-title", "--pages", DRAWN_PAGE, "--quiet", "--out", out], quietEnv({ GITHUB_ACTIONS: "true" }));
-    if (r.status !== 0) problems.push(`expected exit 0, a problem with the metrics being a warning, got ${r.status} (${(r.stderr || r.stdout).trim().split("\n").pop()})`);
-    if (!r.stdout.includes("::warning title=Style metrics problems::")) problems.push("expected the \"Style metrics problems\" warning on stdout, and found none");
-    if (!/Metrics problems: 18 \(measures 12, key 0, body text 6\)/.test(r.stdout)) problems.push(`expected the summary to give 12 measure and 6 body-text problems, got ${JSON.stringify(r.stdout.split("\n").find((l) => l.startsWith("Metrics problems")) ?? "no such line")}`);
-    const prov = JSON.parse(await readFile(join(out, "provenance.json"), "utf8").catch(() => "null"));
+    if (r.status !== 0) problems.push(`expected exit 0, a problem with the metrics being a warning, got ${r.status} (${lastLine(r)})`);
+    if (!r.stdout.includes("::notice title=Style metrics::")) problems.push("expected the \"Style metrics\" notice on stdout, and found none");
+    if (!r.stdout.includes("::warning title=Style metrics problems::42 problem(s)")) problems.push(`expected the "Style metrics problems" warning, of 42 problems, got ${JSON.stringify(/::warning title=Style metrics problems::[^%]*/.exec(r.stdout)?.[0] ?? "none")}`);
+    if (!/Metrics problems: 36 \(measures 18, key 6, body text 6, fonts 6\)/.test(r.stdout)) problems.push(`expected the summary to give 18 measure, 6 key, 6 body-text and 6 fonts problems, got ${JSON.stringify(r.stdout.split("\n").find((l) => l.startsWith("Metrics problems")) ?? "no such line")}`);
+    const prov = await provenanceOf(out);
     if (!prov) problems.push("expected provenance.json, and found none");
-    const m = prov?.metrics, faults = m?.faults ?? [];
-    const body = faults.filter((f) => f.kind === "body text"), measures = faults.filter((f) => f.kind === "measures");
-    const thrown = measures.filter((f) => f.family === "solution" && /measure that throws, forced/.test(f.why)), ruled = measures.filter((f) => f.family === "table" && /line_height "forced".*written empty/.test(f.why));
-    if (m?.fault_counts?.["body text"] !== 6 || m?.fault_counts?.measures !== 12 || faults.length !== 18 || m?.tied_to_counts !== true || m?.not_tied?.length !== 0
-      || body.some((f) => f.family !== null || !/body text that cannot be read, forced/.test(f.why)) || thrown.length !== 6 || ruled.length !== 6)
-      problems.push(`expected provenance metrics to record six body-text faults and twelve measure faults (six thrown, six by the writer's rules), tied to the counts, got ${JSON.stringify({ fault_counts: m?.fault_counts, faults: faults.slice(0, 2), tied: m?.tied_to_counts }).slice(0, 300)}`);
-    const want = parseMetricsCsv(await readFile(join(HERE, "expected-good-metrics.csv"), "utf8")).filter((x) => x.page === DRAWN_PAGE);
+    const m = prov?.metrics, faults = (m?.faults ?? []).filter((f) => f.page === DRAWN_PAGE);
+    const of = (kind, family, re) => faults.filter((f) => f.kind === kind && f.family === family && re.test(f.why)).length;
+    const want = { body: of("body text", null, /body text that cannot be read, forced/), solution: of("measures", "solution", /measure that throws, forced/),
+      table: of("measures", "table", /line_height "forced".*written empty/), title: of("measures", "heading-h1", /measuring evaluation threw.*forced/),
+      key: of("key", "heading-h2", /key source that throws, forced/), fonts: of("fonts", null, /font reading that fails, forced/) };
+    if (Object.values(want).some((n) => n !== 6) || faults.length !== 36 || m?.tied_to_counts !== false || m?.not_tied?.length !== 6 || !m.not_tied.every((x) => x.includes("|heading-h1|") && x.includes(": 0 rows, shown 1")))
+      problems.push(`expected provenance metrics to record six faults of each forced kind, and the page title's six readings not tied, got ${JSON.stringify({ want, faults: faults.length, tied: m?.tied_to_counts, not_tied: m?.not_tied?.slice(0, 2) })}`);
+    if (prov?.environment?.fonts?.unread !== 6) problems.push(`expected the six font readings unread in provenance, got ${prov?.environment?.fonts?.unread}`);
+    const expected = parseMetricsCsv(await readFile(join(HERE, "expected-good-metrics.csv"), "utf8")).filter((x) => x.page === DRAWN_PAGE);
     const rows = await rowsOf(join(out, "metrics.csv"), parseMetricsCsv, problems, "metrics.csv");
     if (rows) {
-      const sol = rows.filter((x) => x.family === "solution"), tab = rows.filter((x) => x.family === "table");
-      if (rows.length !== want.length + 6 || rows.some((x) => x.body_font_size !== "" || x.column !== ""))
-        problems.push(`expected the page's ${want.length} rows and the table's 6, none with body measures, got ${rows.length} rows (${JSON.stringify(rows.find((x) => x.body_font_size !== "") ?? null).slice(0, 160)})`);
-      if (sol.length !== 6 || sol.some((x) => x.width !== "" || x.text !== "" || !x.key.startsWith("label:")))
-        problems.push(`expected the solution's six rows written without their measures and with their key, got ${JSON.stringify(sol[0] ?? null).slice(0, 200)}`);
-      if (tab.length !== 6 || tab.some((x) => x.overflow !== "0" || x.text !== ODD_TAG || x.line_height !== "" || x.font_size === ""))
-        problems.push(`expected the table's six rows with an overflow of 0, the text in ${ODD_TAG} and no line height, got ${JSON.stringify(tab[0] ?? null).slice(0, 200)}`);
+      const fam = (f) => rows.filter((x) => x.family === f);
+      const titles = expected.filter((x) => x.family === "heading-h1").length;
+      if (rows.length !== expected.length - titles + 6 || fam("heading-h1").length || rows.some((x) => x.body_font_size !== "" || x.column !== ""))
+        problems.push(`expected the page's ${expected.length} rows less the page title's ${titles}, and the table's 6, none with body measures, got ${rows.length} rows (${fam("heading-h1").length} for the title)`);
+      if (fam("solution").length !== 6 || fam("solution").some((x) => x.width !== "" || x.text !== "" || !x.key.startsWith("label:")))
+        problems.push(`expected the solution's six rows written without their measures and with their key, got ${JSON.stringify(fam("solution")[0] ?? null).slice(0, 200)}`);
+      const lists = fam("heading-h2").filter((x) => x.n === "1"), sums = fam("heading-h2").filter((x) => x.n === "2");
+      if (lists.length !== 6 || lists.some((x) => x.key !== "" || x.width === "") || sums.some((x) => !x.key.startsWith("heading:")))
+        problems.push(`expected the Lists heading's six rows with their measures and no key, and the other heading keyed, got ${JSON.stringify(lists[0] ?? null).slice(0, 200)}`);
+      if (fam("table").length !== 6 || fam("table").some((x) => x.overflow !== "0" || x.text !== ODD_TAG || x.line_height !== "" || x.font_size === ""))
+        problems.push(`expected the table's six rows with an overflow of 0, the text in ${ODD_TAG} and no line height, got ${JSON.stringify(fam("table")[0] ?? null).slice(0, 200)}`);
     }
   } finally {
     await rm(work, { recursive: true, force: true });
   }
-  console.log(`${problems.length ? "FAIL" : "ok  "} run.mjs on the good site built for ${base}, its body text and a measure forced to fail, with a bordered table, an odd tag and a value the writer's rules refuse: warnings, recorded in provenance, every row written, exit 0${problems.length ? `, ${problems.length} mismatch(es)` : ""}`);
+  console.log(`${problems.length ? "FAIL" : "ok  "} run.mjs on the good site built for ${base}, a problem of each kind forced in a page reading, with a bordered table, an odd tag and a value the writer's rules refuse: warnings, recorded in provenance, every row written, exit 0${problems.length ? `, ${problems.length} mismatch(es)` : ""}`);
+  for (const p of problems) console.log(`       ${p}`);
+  return problems;
+}
+
+// run.mjs, as in GitHub Actions, where what the metrics read beside the pages fails: a --labels file that does not
+// parse, no fc-list on PATH, and a metrics.csv that cannot be written (a directory where it goes). It must exit 0,
+// print the warning, record a labels, a fonts and a writer problem, name the labels file it tried, fingerprint without
+// the installed fonts, and write provenance.json with no rows written and no metrics.csv among its outputs.
+async function envCheck(goodDir, base) {
+  const work = await mkdtemp(join(tmpdir(), "harness-selftest-env-"));
+  const problems = [];
+  try {
+    const labelsFile = join(work, "bad-labels.yml"), bin = join(work, "bin"), out = join(work, "out");
+    await writeFile(labelsFile, "typography: [a\n  b: : :\n");
+    await mkdir(bin);
+    await mkdir(join(out, "metrics.csv"), { recursive: true });
+    const r = runMjs(["--dir", goodDir, "--base-path", base, "--table", join(HERE, "locators.yml"), "--drawn", await quietTable(work), "--labels", labelsFile,
+      "--only", "header-title", "--pages", DRAWN_PAGE, "--quiet", "--out", out], quietEnv({ GITHUB_ACTIONS: "true", PATH: bin }));
+    if (r.status !== 0) problems.push(`expected exit 0, a problem with the metrics being a warning, got ${r.status} (${lastLine(r)})`);
+    if (!r.stdout.includes("::warning title=Style metrics problems::")) problems.push("expected the \"Style metrics problems\" warning on stdout, and found none");
+    const prov = await provenanceOf(out);
+    if (!prov) problems.push("expected provenance.json, and found none");
+    const m = prov?.metrics, f = prov?.environment?.fonts, faults = m?.faults ?? [];
+    const kinds = { labels: faults.filter((x) => x.kind === "labels" && /could not be read/.test(x.why)).length, fonts: faults.filter((x) => x.kind === "fonts" && /fc-list/.test(x.why)).length,
+      writer: faults.filter((x) => x.kind === "writer" && /metrics\.csv could not be written/.test(x.why)).length };
+    if (kinds.labels !== 1 || kinds.fonts !== 1 || kinds.writer !== 1 || m?.fault_counts?.labels !== 1 || m?.fault_counts?.writer !== 1)
+      problems.push(`expected a labels, a fonts (fc-list) and a writer problem, got ${JSON.stringify({ kinds, fault_counts: m?.fault_counts })}`);
+    if (!String(m?.labels?.from).endsWith("bad-labels.yml") || m?.labels?.pages !== 0) problems.push(`expected the labels file tried named, and no pages' labels, got ${JSON.stringify(m?.labels)}`);
+    if (m?.rows !== 0 || m?.written !== false || prov?.outputs?.includes("metrics.csv")) problems.push(`expected no rows written and no metrics.csv in the outputs, got ${JSON.stringify({ rows: m?.rows, written: m?.written, outputs: prov?.outputs })}`);
+    if (f?.installed !== null || !/^[0-9a-f]{64}$/.test(f?.fingerprint ?? "")) problems.push(`expected a fingerprint without the installed fonts, got ${JSON.stringify({ installed: f?.installed, fingerprint: f?.fingerprint })}`);
+  } finally {
+    await rm(work, { recursive: true, force: true });
+  }
+  console.log(`${problems.length ? "FAIL" : "ok  "} run.mjs on the good site built for ${base}, a labels file that does not parse, no fc-list and a metrics.csv that cannot be written: warnings, recorded in provenance, exit 0${problems.length ? `, ${problems.length} mismatch(es)` : ""}`);
   for (const p of problems) console.log(`       ${p}`);
   return problems;
 }
 
 // run.mjs without --labels, as CI runs it: a copy of the harness in a repository of its own, whose lectures/ holds
-// this corpus's table of contents and a MyST typography.md with the fixtures' labels. It must read the labels from
-// lectures/typography.md, key the typography page's surfaces as the expected metrics do, and name in provenance the
-// pages with no source.
+// this corpus's table of contents, a MyST typography.md with the fixtures' labels (one in a directive's YAML options),
+// and an intro.md that cannot be read (a directory). It must read the labels from lectures/typography.md, key the
+// typography page's surfaces as the expected metrics do, and record two labels problems: intro's source unreadable,
+// and the pages with no source.
 async function lecturesCheck(goodDir, base) {
   const work = await mkdtemp(join(tmpdir(), "harness-selftest-lectures-"));
   const problems = [];
@@ -463,16 +558,19 @@ async function lecturesCheck(goodDir, base) {
     await symlink(join(HERE, "..", "node_modules"), join(harness, "node_modules"));
     await mkdir(join(root, "lectures"), { recursive: true });
     for (const f of ["_toc.yml", "myst.yml"]) await cp(join(HERE, "..", "..", "..", "lectures", f), join(root, "lectures", f)).catch(() => {});
-    await writeFile(join(root, "lectures", `${DRAWN_PAGE}.md`), ["(typography)=", "# Typography", "", "(lists)=", "## Lists", "",
-      ":::{exercise}", ":label: selftest-ex-1", ":::", "", ":::{solution} selftest-ex-1", ":label: selftest_sol_1", ":::", ""].join("\n"));
+    await writeFile(join(root, "lectures", `${DRAWN_PAGE}.md`), ["---", "kernelspec:", "  name: python3", "---", "(typography)=", "# Typography", "", "(lists)=", "## Lists", "",
+      ":::{exercise}", ":label: selftest-ex-1", ":::", "", ":::{solution} selftest-ex-1", "---", "label: selftest_sol_1", "---", ":::", ""].join("\n"));
+    await mkdir(join(root, "lectures", "intro.md"));
     const out = join(work, "out");
     const r = spawnSync(process.execPath, [join(harness, "run.mjs"), "--dir", goodDir, "--base-path", base, "--table", join(HERE, "locators.yml"),
       "--drawn", join(HERE, "drawn.yml"), "--only", "header-title", "--pages", DRAWN_PAGE, "--quiet", "--out", out], { encoding: "utf8", env: quietEnv() });
-    if (r.status !== 1) problems.push(`expected exit 1 for the selector that throws, got ${r.status} (${(r.stderr || r.stdout).trim().split("\n").pop()})`);
-    const prov = JSON.parse(await readFile(join(out, "provenance.json"), "utf8").catch(() => "null"));
-    const l = prov?.metrics?.labels;
-    if (l?.from !== "lectures/<page>.md" || !l?.no_source?.includes("intro") || l?.no_source?.includes(DRAWN_PAGE) || l?.labels !== 4)
-      problems.push(`expected the labels read from lectures/<page>.md (four on ${DRAWN_PAGE}), the pages with no source named, got ${JSON.stringify(l).slice(0, 200)}`);
+    if (r.status !== 1) problems.push(`expected exit 1 for the selector that throws, got ${r.status} (${lastLine(r)})`);
+    const prov = await provenanceOf(out);
+    const l = prov?.metrics?.labels, faults = (prov?.metrics?.faults ?? []).filter((f) => f.kind === "labels");
+    if (l?.from !== "lectures/<page>.md" || !l?.no_source?.length || l?.no_source?.includes(DRAWN_PAGE) || l?.no_source?.includes("intro") || l?.labels !== 4 || JSON.stringify(l?.unreadable) !== '["intro"]')
+      problems.push(`expected the labels read from lectures/<page>.md (four on ${DRAWN_PAGE}), intro's unreadable, the pages with no source named, got ${JSON.stringify(l).slice(0, 240)}`);
+    if (faults.length !== 2 || !faults.some((f) => /intro\.md could not be read/.test(f.why)) || !faults.some((f) => /have no source in lectures/.test(f.why)))
+      problems.push(`expected two labels problems, intro's source unreadable and the pages with no source, got ${JSON.stringify(faults.map((f) => f.why)).slice(0, 300)}`);
     const want = parseMetricsCsv(await readFile(join(HERE, "expected-good-metrics.csv"), "utf8")).filter((x) => x.page === DRAWN_PAGE);
     const rows = await rowsOf(join(out, "metrics.csv"), parseMetricsCsv, problems, "metrics.csv");
     if (rows && JSON.stringify(rows.map((x) => `${metricKeyOf(x)} ${x.key}`)) !== JSON.stringify(want.map((x) => `${metricKeyOf(x)} ${x.key}`)))
@@ -480,57 +578,61 @@ async function lecturesCheck(goodDir, base) {
   } finally {
     await rm(work, { recursive: true, force: true });
   }
-  console.log(`${problems.length ? "FAIL" : "ok  "} run.mjs on the good site built for ${base} without --labels: the labels read from lectures/${DRAWN_PAGE}.md${problems.length ? `, ${problems.length} mismatch(es)` : ""}`);
+  console.log(`${problems.length ? "FAIL" : "ok  "} run.mjs on the good site built for ${base} without --labels: the labels read from lectures/${DRAWN_PAGE}.md, a source that cannot be read and the pages with none recorded${problems.length ? `, ${problems.length} mismatch(es)` : ""}`);
   for (const p of problems) console.log(`       ${p}`);
   return problems;
 }
 
-// The fingerprint, through run.mjs: three runs on a build of the good site whose typography page uses a web font of
-// the site's own and holds a frame that uses another, with a stand-in fc-list on PATH that lists one font at the
-// version HARNESS_SELFTEST_FONTVERSION gives. The second run moves the installed font's version, and the fingerprint
-// must move; the third has the first's version, and the frame's font changed, and is served on another port, and the
-// fingerprint must be the first's. The main frame's font file is listed by its path under the base with a hash of its
-// bytes, and the frame's apart.
+// The fingerprint, through run.mjs: five runs on a build of the good site whose typography page uses a web font of
+// the site's own and holds a frame that uses another, with a stand-in fc-list on PATH that lists one installed font,
+// a file of the run's own, at the version HARNESS_SELFTEST_FONTVERSION gives. Against the first run: the second moves
+// the installed font's version, and the fingerprint must move; the third changes the frame's font, and is served on
+// another port, and the fingerprint must not; the fourth changes the site's font file's bytes at the same address, and
+// the fifth the installed font file's bytes under the same name and version, and the fingerprint must move for each.
+// The main frame's font file is listed by its path under the base with a hash of its bytes, and the frame's apart.
 async function fontCheck(goodDir, base) {
   const work = await mkdtemp(join(tmpdir(), "harness-selftest-fonts-"));
   const problems = [];
   try {
-    const bin = join(work, "bin");
+    const bin = join(work, "bin"), installedFile = join(work, "selftest-sans.ttf");
     await mkdir(bin);
-    await writeFile(join(bin, "fc-list"), `#!/bin/sh
-case " $* " in *" fontversion "*) echo "Selftest Sans:style=Book:fontversion=$HARNESS_SELFTEST_FONTVERSION:file=/selftest/selftest-sans.ttf" ;;
-  *) echo "Selftest Sans:style=Book:file=/selftest/selftest-sans.ttf" ;; esac
-`);
+    await writeFile(join(bin, "fc-list"), "#!/bin/sh\nprintf '%s\\tSelftest Sans\\tBook\\t%s\\n' \"$HARNESS_SELFTEST_FONTFILE\" \"$HARNESS_SELFTEST_FONTVERSION\"\n");
     await chmod(join(bin, "fc-list"), 0o755);
     const dir = join(work, "site");
     const file = await siteCopy(goodDir, dir, DRAWN_PAGE);
     await mkdir(join(dir, "fonts"));
-    for (const f of ["main", "frame-a", "frame-b"]) await writeFile(join(dir, "fonts", `${f}.woff2`), `not a font: ${f}`);
     const frame = (f) => `<!doctype html><html><head><meta charset="utf-8"><style>@font-face{font-family:SelftestFrame;src:url(${base}fonts/${f}.woff2)}</style></head><body><p style="font-family:SelftestFrame">a frame's text</p></body></html>`;
     const main = theme.side === "sphinx" ? "</section></main>" : "</main></article>";
     await writeFile(file, (await readFile(file, "utf8")).replace(main, `<style>@font-face{font-family:SelftestWeb;src:url(${base}fonts/main.woff2)}</style><p style="font-family:SelftestWeb">text in the site's web font</p><iframe src="${base}frame.html" style="width:200px;height:60px"></iframe>${main}`));
     const table = await quietTable(work);
-    const once = async (version, frameFont) => {
+    let i = 0;
+    const once = async ({ version = "1.000", frameFont = "frame-a", site = "main-1", installed = "installed-1" } = {}) => {
+      for (const f of ["frame-a", "frame-b"]) await writeFile(join(dir, "fonts", `${f}.woff2`), `not a font: ${f}`);
+      await writeFile(join(dir, "fonts", "main.woff2"), `not a font: ${site}`);
+      await writeFile(installedFile, `not a font: ${installed}`);
       await writeFile(join(dir, "frame.html"), frame(frameFont));
-      const out = join(work, `out-${version}-${frameFont}`);
+      const out = join(work, `out-${++i}`);
       const r = runMjs(["--dir", dir, "--base-path", base, "--table", join(HERE, "locators.yml"), "--drawn", table, "--labels", join(HERE, "labels.yml"),
-        "--only", "header-title", "--pages", DRAWN_PAGE, "--quiet", "--out", out], quietEnv({ PATH: `${bin}${delimiter}${process.env.PATH}`, HARNESS_SELFTEST_FONTVERSION: version }));
-      if (r.status !== 0) problems.push(`fonts, version ${version}: expected exit 0, got ${r.status} (${(r.stderr || r.stdout).trim().split("\n").pop()})`);
-      return JSON.parse(await readFile(join(out, "provenance.json"), "utf8").catch(() => "null"))?.environment?.fonts ?? null;
+        "--only", "header-title", "--pages", DRAWN_PAGE, "--quiet", "--out", out],
+        quietEnv({ PATH: `${bin}${delimiter}${process.env.PATH}`, HARNESS_SELFTEST_FONTVERSION: version, HARNESS_SELFTEST_FONTFILE: installedFile }));
+      if (r.status !== 0) problems.push(`fonts, run ${i}: expected exit 0, got ${r.status} (${lastLine(r)})`);
+      return (await provenanceOf(out))?.environment?.fonts ?? null;
     };
-    const [one, two, three] = [await once("1.000", "frame-a"), await once("2.000", "frame-a"), await once("1.000", "frame-b")];
-    if (!one || !two || !three) problems.push("fonts: expected environment.fonts in each run's provenance.json");
+    const one = await once(), version = await once({ version: "2.000" }), framed = await once({ frameFont: "frame-b" }), site = await once({ site: "main-2" }), bytes = await once({ installed: "installed-2" });
+    if (![one, version, framed, site, bytes].every(Boolean)) problems.push("fonts: expected environment.fonts in each run's provenance.json");
     else {
-      if (one.installed?.count !== 1) problems.push(`fonts: expected the stand-in fc-list's one font, got ${JSON.stringify(one.installed)}`);
-      if (one.fingerprint === two.fingerprint) problems.push("fonts: the installed font's version moved, and the fingerprint did not");
-      if (one.fingerprint !== three.fingerprint) problems.push("fonts: only the frame's font and the port moved, and the fingerprint did too");
+      if (one.installed?.count !== 1 || one.installed?.files !== 1 || one.installed?.unread !== 0) problems.push(`fonts: expected the stand-in fc-list's one font, its file read, got ${JSON.stringify(one.installed)}`);
+      if (one.fingerprint === version.fingerprint) problems.push("fonts: the installed font's version moved, and the fingerprint did not");
+      if (one.fingerprint !== framed.fingerprint) problems.push("fonts: only the frame's font and the port moved, and the fingerprint did too");
+      if (one.fingerprint === site.fingerprint) problems.push("fonts: the site's font file's bytes moved at the same address, and the fingerprint did not");
+      if (one.fingerprint === bytes.fingerprint) problems.push("fonts: the installed font file's bytes moved under the same name and version, and the fingerprint did not");
       if (!one.files.some((f) => /^fonts\/main\.woff2 sha256:[0-9a-f]{12}$/.test(f))) problems.push(`fonts: expected the main frame's font file by its path under the base, with a hash, got ${JSON.stringify(one.files)}`);
-      if (!one.frame_files.some((f) => f.includes("frame-a.woff2")) || !three.frame_files.some((f) => f.includes("frame-b.woff2"))) problems.push(`fonts: expected the frame's font files listed apart, got ${JSON.stringify(one.frame_files)} and ${JSON.stringify(three.frame_files)}`);
+      if (!one.frame_files.some((f) => f.includes("frame-a.woff2")) || !framed.frame_files.some((f) => f.includes("frame-b.woff2"))) problems.push(`fonts: expected the frame's font files listed apart, got ${JSON.stringify(one.frame_files)} and ${JSON.stringify(framed.frame_files)}`);
     }
   } finally {
     await rm(work, { recursive: true, force: true });
   }
-  console.log(`${problems.length ? "FAIL" : "ok  "} run.mjs's fingerprint on the good site built for ${base}: it moves with an installed font's version, not with a frame's font or the port${problems.length ? `, ${problems.length} mismatch(es)` : ""}`);
+  console.log(`${problems.length ? "FAIL" : "ok  "} run.mjs's fingerprint on the good site built for ${base}: it moves with an installed font's version or bytes and a site font's bytes, not with a frame's font or the port${problems.length ? `, ${problems.length} mismatch(es)` : ""}`);
   for (const p of problems) console.log(`       ${p}`);
   return problems;
 }
@@ -571,7 +673,7 @@ try {
       if (warned.length) annotate("error", [`self-test: run.mjs's warning for a problem with the metrics, on the good site built for ${base}`, ...warned]);
       // the source labels and the fingerprint read no base: once is enough
       if (base === BASES[0]) {
-        for (const [what, c] of [["run.mjs without --labels", lecturesCheck], ["run.mjs's fingerprint", fontCheck]]) {
+        for (const [what, c] of [["run.mjs where what the metrics read beside the pages fails", envCheck], ["run.mjs without --labels", lecturesCheck], ["run.mjs's fingerprint", fontCheck]]) {
           const found = await c(join(into, "good"), base);
           bad += found.length;
           if (found.length) annotate("error", [`self-test: ${what}, on the good site built for ${base}`, ...found]);

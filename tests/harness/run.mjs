@@ -9,8 +9,9 @@
 // and counts and metrics are data, never a failed run). Exit 1: a check could not run (an `error` row: it threw, a
 // page did not load, or a colour scheme did not take effect), or a drawn selector threw; the CSVs are still written.
 // A problem with the metrics (a surface's measures or key source threw, a measure is not a value its column takes, a
-// page's body text could not be read, the labels could not be read, the fonts could not be fingerprinted, metrics.csv
-// could not be written, or the metrics do not tie to the counts) never fails or stops the run: it is a warning on the
+// page's body text could not be read, the labels or a page's source could not be read, a page has no source, a part
+// of the font fingerprint could not be read, metrics.csv could not be written, or the metrics do not tie to the
+// counts) never fails or stops the run: it is a warning on the
 // run in GitHub Actions, and is in provenance.json (`metrics.faults`, `metrics.not_tied`), which is always written,
 // and the summary, so it never holds back what the deploy publishes. Exit 2: nothing was checked (a bad argument, a
 // locator or drawn table that does not parse, a site that cannot be served).
@@ -133,13 +134,17 @@ async function main() {
   // page's source labels, or the file --labels gives; unreadable, no label keys, and a `labels` problem.
   const runFaults = [];
   const runFault = (kind, why) => runFaults.push({ page: null, viewport: null, scheme: null, kind, family: null, n: null, why: oneLine(why, 300) });
-  let labels = {}, labelsFrom = null, labelsMissing = [];
+  let labels = {}, labelsFrom = null, labelsMissing = [], labelsUnread = [];
   if (measuring) {
     try {
-      if (o.labels) { labels = YAML.parse(await readFile(o.labels, "utf8")) ?? {}; labelsFrom = relative(REPO, o.labels); }
-      else { ({ labels, missing: labelsMissing } = await sourceLabels(join(REPO, "lectures"), order)); labelsFrom = "lectures/<page>.md"; }
+      labelsFrom = o.labels ? relative(REPO, o.labels) : "lectures/<page>.md";
+      if (o.labels) labels = YAML.parse(await readFile(o.labels, "utf8")) ?? {};
+      else ({ labels, missing: labelsMissing, unreadable: labelsUnread } = await sourceLabels(join(REPO, "lectures"), order));
       if (typeof labels !== "object" || Array.isArray(labels) || Object.values(labels).some((v) => !Array.isArray(v))) throw new Error("not a mapping of pages to lists of labels");
     } catch (e) { labels = {}; runFault("labels", `the labels could not be read, so no surface has a label key: ${e.message}`); }
+    // a page's source that is there and cannot be read, and pages with no source (every page of both corpora has one)
+    for (const u of labelsUnread) runFault("labels", `lectures/${u.page}.md could not be read, so ${u.page}'s surfaces have no label keys: ${u.why}`);
+    if (labelsMissing.length) runFault("labels", `${labelsMissing.length} page(s) have no source in lectures/ (${labelsMissing.slice(0, 8).join(", ")}${labelsMissing.length > 8 ? ", …" : ""}), so their surfaces have no label keys`);
   }
 
   let site, server = null;
@@ -202,9 +207,11 @@ async function main() {
       files = new Set((fonts ?? []).flatMap((f) => f.files ?? []));
       frameFiles = new Set((fonts ?? []).flatMap((f) => f.frames ?? []));
       engines = (k) => [...new Set((fonts ?? []).map((f) => f.engines?.[k]).filter(Boolean))].sort();
-      installed = installedFonts();
-      print = fingerprint(rendered, files, installed?.lines ?? []);
-    } catch (e) { late("fonts", `the fonts could not be fingerprinted: ${e.message}`); }
+    } catch (e) { late("fonts", `the fonts the pages read could not be gathered: ${e.message}`); }
+    // fc-list missing or failing: the fingerprint has no installed fonts, and says so
+    try { installed = installedFonts(); } catch (e) { late("fonts", `the installed fonts could not be listed (fc-list), so the fingerprint has none of them: ${e.message}`); }
+    if (installed?.unread.length) late("fonts", `${installed.unread.length} installed font file(s) could not be read, so the fingerprint has their names, not their bytes: ${installed.unread.slice(0, 3).join("; ")}`);
+    try { print = fingerprint(rendered, files, installed?.lines ?? []); } catch (e) { late("fonts", `the fonts could not be fingerprinted: ${e.message}`); }
   }
   const provenance = {
     schema: 3,
@@ -246,8 +253,9 @@ async function main() {
       body_text: theme.bodyText,
       glyphs: theme.glyphs ?? null,
       key: KEY_RULES,
-      labels: { from: labelsFrom, pages: Object.keys(labels).length, labels: Object.values(labels).reduce((n, l) => n + (Array.isArray(l) ? l.length : 0), 0), no_source: labelsMissing },
+      labels: { from: labelsFrom, pages: Object.keys(labels).length, labels: Object.values(labels).reduce((n, l) => n + (Array.isArray(l) ? l.length : 0), 0), no_source: labelsMissing, unreadable: labelsUnread.map((u) => u.page) },
       rows: metricRows.length,
+      written: null,
       readings: { taken: tie.readings, of: pages.length * PAGE_VIEWPORTS.length * SCHEMES.length },
       tied_to_counts: tie.ok,
       not_tied: tie.off,
@@ -273,7 +281,7 @@ async function main() {
         files: [...files].sort(),
         frame_files: [...frameFiles].sort(),
         unread: (fonts ?? []).filter((f) => f?.error).length,
-        installed: installed && { command: installed.command, count: installed.lines.length, sha256: installed.sha256 },
+        installed: installed && { command: installed.command, count: installed.lines.length, files: installed.files, unread: installed.unread.length, seconds: installed.seconds, sha256: installed.sha256 },
       } : null,
       maths: measuring ? { mathjax: engines("mathjax"), katex: engines("katex") } : null,
     },
@@ -309,6 +317,8 @@ async function main() {
     await rm(join(o.out, "metrics.csv"), { force: true }).catch(() => {});
     provenance.outputs = provenance.outputs.filter((f) => f !== "metrics.csv");
   }
+  // the rows written: none where the writer failed
+  if (provenance.metrics) Object.assign(provenance.metrics, { written: metricsWritten, rows: metricsWritten ? metricRows.length : 0 });
   if (provenance.metrics) provenance.metrics.fault_counts = faultCounts(allFaults);
   await writeFile(join(o.out, "provenance.json"), JSON.stringify(provenance, null, 2) + "\n");
 
@@ -384,7 +394,7 @@ function metricsSummary(metrics, tie, faults, provenance, drawn) {
     `Keys: ${kinds.join(", ")}; none, so paired by n: ${e.key}.`,
     `Empty values: text ${e.text} (no visible text), overflow ${e.overflow} (an inline box), body text ${e.body_text}${noBody.length ? ` (${noBody.slice(0, 6).join("; ")}${noBody.length > 6 ? "; …" : ""})` : ""}, every measure ${e.measures}.`,
     faults.length ? `Metrics problems: ${faults.length} (${Object.entries(faultCounts(faults)).filter(([k, n]) => n || ["measures", "key", "body text"].includes(k)).map(([k, n]) => `${k} ${n}`).join(", ")}): ${faults.slice(0, 6).map(faultWords).join("; ")}${faults.length > 6 ? "; …" : ""}` : "Metrics problems: none (every surface measured and keyed, every body text read).",
-    `Environment: ${env.runner.image_os ?? "no runner image"} ${env.runner.image_version ?? ""}`.trimEnd() + `${env.os_release ? `, ${env.os_release}` : ""}, chromium ${env.browser.build}${env.maths.mathjax.length ? `, MathJax ${env.maths.mathjax.join(", ")}` : ""}${env.maths.katex.length ? `, KaTeX ${env.maths.katex.join(", ")}` : ""}; fonts ${String(f.fingerprint ?? "").slice(0, 12) || "unread"} (${f.rendered.length} rendered, ${f.files.length} font files in the main frames${f.frame_files.length ? `, ${f.frame_files.length} in frames, not fingerprinted` : ""}${f.unread ? `, ${f.unread} reading(s) unread` : ""}${f.installed ? `; installed ${f.installed.count}, ${f.installed.sha256.slice(0, 12)}` : "; no fc-list"}).`,
+    `Environment: ${env.runner.image_os ?? "no runner image"} ${env.runner.image_version ?? ""}`.trimEnd() + `${env.os_release ? `, ${env.os_release}` : ""}, chromium ${env.browser.build}${env.maths.mathjax.length ? `, MathJax ${env.maths.mathjax.join(", ")}` : ""}${env.maths.katex.length ? `, KaTeX ${env.maths.katex.join(", ")}` : ""}; fonts ${String(f.fingerprint ?? "").slice(0, 12) || "unread"} (${f.rendered.length} rendered, ${f.files.length} font files in the main frames${f.frame_files.length ? `, ${f.frame_files.length} in frames, not fingerprinted` : ""}${f.unread ? `, ${f.unread} reading(s) unread` : ""}${f.installed ? `; installed ${f.installed.count} in ${f.installed.files} files, hashed in ${f.installed.seconds} s, ${f.installed.sha256.slice(0, 12)}` : "; no installed fonts listed"}).`,
     `Web fonts rendered: ${[...new Set(f.rendered.filter((x) => x.endsWith(", web")).map((x) => x.replace(/ \(.*$/, "")))].join(", ") || "none"}.`,
   ];
 }
@@ -396,14 +406,32 @@ function osRelease() {
 
 /**
  * The fonts installed for Chromium to fall back on: fontconfig's list, each font's family, style, version and file,
- * so a new version of a font shows; null without fc-list. Its lines go into the fingerprint.
+ * with the SHA-256 of the file's bytes (each file read once), so a new version of a font, or new bytes under the same
+ * name, shows; `unread`, the files that could not be read, listed without a hash. Throws where fc-list cannot be run
+ * or fails. Its lines go into the fingerprint.
  */
 function installedFonts() {
-  try {
-    const out = execFileSync("fc-list", [":", "family", "style", "fontversion", "file"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], maxBuffer: 64 << 20 });
-    const lines = [...new Set(out.split("\n").map((l) => l.trim()).filter(Boolean))].sort();
-    return { command: "fc-list : family style fontversion file", lines, sha256: createHash("sha256").update(lines.join("\n"), "utf8").digest("hex") };
-  } catch { return null; }
+  const started = Date.now();
+  const command = ["--format", "%{file}\\t%{family}\\t%{style}\\t%{fontversion}\\n"];
+  const out = execFileSync("fc-list", command, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 64 << 20 });
+  const hashes = new Map(), unread = [];
+  const hashOf = (file) => {
+    if (!hashes.has(file)) {
+      let h = null;
+      try { h = createHash("sha256").update(readFileSync(file)).digest("hex").slice(0, 12); } catch (e) { unread.push(`${file}: ${e.code ?? e.message}`); }
+      hashes.set(file, h);
+    }
+    return hashes.get(file);
+  };
+  const lines = [...new Set(out.split("\n").map((l) => l.trim()).filter(Boolean))].sort().map((l) => {
+    const [file, ...rest] = l.split("\t");
+    const h = file ? hashOf(file) : null;
+    return `${[...rest, file].join("\t")}${h ? ` sha256:${h}` : ""}`;
+  });
+  return {
+    command: `fc-list ${command.join(" ")}, and each file's bytes`, lines, files: hashes.size, unread, seconds: Math.round((Date.now() - started) / 100) / 10,
+    sha256: createHash("sha256").update(lines.join("\n"), "utf8").digest("hex"),
+  };
 }
 
 /** A workflow command's message: GitHub reads `%`, CR and LF escaped. */

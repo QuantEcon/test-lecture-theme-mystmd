@@ -46,8 +46,8 @@ const profile = {
  * element replaced by the TeX in KaTeX's annotation between U+E000 and U+E001), or the book's title
  * where the first page has no title of its own; `label`, the id at the surface's own label site, the surface itself
  * or, for a display, the block mystmd puts its label on (two levels up), with the `fn-` mystmd puts before a
- * footnote's label dropped. The engine keeps a label only where the page's source has it, so mystmd's generated ids
- * (ten-character keys such as `rucnplfZ7R`, React's `:R55anop:`) never become keys.
+ * footnote's label dropped. The engine keeps a label only where it is an id `labelIds` gives one of the page's source
+ * labels, so mystmd's generated ids (ten-character keys such as `rucnplfZ7R`, React's `:R55anop:`) never become keys.
  */
 function sourceOf(e, root) {
   const out = {};
@@ -73,7 +73,12 @@ function sourceOf(e, root) {
     else {
       const h = e.cloneNode(true);
       for (const x of h.querySelectorAll(".select-none, a[aria-label]")) x.remove();
-      out.heading = maths(h).textContent.replace(/^\s*\d+(?:\.\d+)*\.\s+/, "");
+      // a page title's number, which the theme writes as text of its own before the title ("2", ". "); a number the
+      // author wrote in the title is the title's, as Sphinx keeps it
+      const parts = [...h.childNodes].filter((n) => n.nodeType !== Node.COMMENT_NODE);
+      if (parts.length > 2 && parts[0].nodeType === Node.TEXT_NODE && /^\d+(?:\.\d+)*$/.test(parts[0].nodeValue.trim())
+        && parts[1].nodeType === Node.TEXT_NODE && parts[1].nodeValue.trim() === ".") { parts[0].remove(); parts[1].remove(); }
+      out.heading = maths(h).textContent;
     }
   } else if (e.matches('[aria-label="Book title"]')) out.heading = e.textContent;
   const site = e.matches(".katex-display") ? e.parentElement?.parentElement : e;
@@ -153,6 +158,22 @@ async function itemWords(c, it) {
 
 /** Does the item give this page's notebook? Its URL's file, or the name of the file it downloads. */
 const givesNotebook = (it, stem) => (it.url && new URL(it.url).pathname.endsWith(`/${stem}.ipynb`)) || it.selected?.file === `${stem}.ipynb`;
+
+// mystmd's ids for a label (myst-common's normalizeIdentifier and createHtmlId, the same at QE_MYSTMD_SHA): its
+// identifier, whitespace collapsed, quotes dropped, trimmed and lower-cased; and its html id, from that, every other
+// character as `-`, `id-` before a leading digit or hyphen, runs of `-` as one, and none at either end
+export function mystIdentifier(label) {
+  return String(label).replace(/[\t\n\r ]+/g, " ").replace(/['\u2018\u2019"\u201c\u201d]+/g, "").trim().toLowerCase();
+}
+export function mystHtmlId(identifier) {
+  return String(identifier).toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/^([0-9-])/, "id-$1").replace(/-[-]+/g, "-").replace(/(?:^[-]+)|(?:[-]+$)/g, "");
+}
+
+/**
+ * The ids this build gives a source label: its html id (a target, a directive's label, an equation), and its
+ * identifier, which a footnote's id is after `fn-` (myst-theme's `fn-${identifier}`).
+ */
+const labelIds = (label) => { const id = mystIdentifier(label); return [mystHtmlId(id), id]; };
 
 const behaviours = {
   ...B.commonBehaviours(profile),
@@ -426,6 +447,7 @@ export default {
   // 1px, is hidden text the metrics leave out
   glyphs: null,
   sourceOf,
+  labelIds,
   repository: "QuantEcon/test-lecture-theme-mystmd",
   basePath: "/test-lecture-theme-mystmd/",
   publishedBase: "https://quantecon.github.io/test-lecture-theme-mystmd/",

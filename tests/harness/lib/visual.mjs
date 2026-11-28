@@ -70,8 +70,9 @@ export function harnessPx(v) {
  * Is what this element holds hidden from the reader, though checkVisibility() passes it? Runs in the page. It is, when
  * it or an ancestor up to `stop` (the surface) is visually hidden: a box of 1px or less in a direction it hides its
  * overflow in (the "screen-reader only" pattern, and KaTeX's MathML copy), a `clip: rect(…)` on an absolutely placed box
- * that leaves 1px or less (MathJax's assistive MathML), or a `clip-path: inset(…)` of 50% or more. `memo` keeps each
- * element's answer for the surface.
+ * that leaves 1px or less (MathJax's assistive MathML), or a `clip-path: inset(…)` that does (its four insets read,
+ * each a length or a percentage of the box: `inset(50%)` and `inset(0 0 100% 0)` hide, `inset(50% 0 0 0)` leaves half).
+ * `memo` keeps each element's answer for the surface.
  */
 export function harnessHidden(el, stop, memo) {
   if (!el) return false;
@@ -83,7 +84,15 @@ export function harnessHidden(el, stop, memo) {
     const [t, rt, b, l] = s.clip.slice(5, -1).split(/[\s,]+/).map((v) => (v === "auto" ? null : parseFloat(v)));
     hidden = (rt != null && l != null && rt - l <= 1) || (b != null && t != null && b - t <= 1);
   }
-  if (!hidden) { const m = /^inset\(\s*([\d.]+)%/.exec(s.clipPath); hidden = !!m && parseFloat(m[1]) >= 50; }
+  if (!hidden) {
+    const m = /^inset\(([^)]*)\)/.exec(s.clipPath);
+    if (m) {
+      const [t, rt = t, b = t, l = rt] = m[1].split(/\s+round\s+/)[0].trim().split(/\s+/);
+      const len = (v, of) => (v.endsWith("%") ? (parseFloat(v) / 100) * of : parseFloat(v) || 0);
+      const [y, x] = [len(t, r.height) + len(b, r.height), len(rt, r.width) + len(l, r.width)];
+      hidden = (y > 0 && r.height - y <= 1) || (x > 0 && r.width - x <= 1);
+    }
+  }
   if (!hidden && el !== stop) hidden = harnessHidden(el.parentElement, stop, memo);
   memo.set(el, hidden);
   return hidden;
@@ -106,8 +115,9 @@ export function harnessContent(c) {
  * dominant text: of what the surface draws as text (its text nodes, and the `::before` content of any element that
  * `glyphs` names: MathJax draws its glyphs so), leaving out what is hidden (checkVisibility(), then harnessHidden),
  * grouped by the colour, font size, font family and weight it is drawn in, the group with the most characters
- * (harnessChars; the first in document order on a tie), read on the first element that draws it: its tag, font size
- * and line height, and its colour, background and contrast (harnessPaint). Text drawn as generated content has no
+ * (harnessChars; the first in document order on a tie), read on the element in it that draws the most of it (the first
+ * on a tie; so a heading's own text, not its section number): its tag, font size and line height, and its colour,
+ * background and contrast (harnessPaint). Text drawn as generated content has no
  * line height: MathJax sets its glyphs' to 0 and places them by padding, so a CSS line height does not describe them,
  * and the column is left empty. A surface that draws no text has these empty. The element that draws the dominant
  * text is kept in `window.__harnessText`, for the font fingerprint.
@@ -128,11 +138,16 @@ export function harnessMeasure(e, kit, glyphs) {
     if (!chars || !at || !shown(at)) continue;
     const s = getComputedStyle(at, pseudo);
     const key = [s.color, s.fontSize, s.fontFamily, s.fontWeight].join("|");
-    const g = groups.get(key);
-    if (g) g.chars += chars; else groups.set(key, { chars, at, pseudo });
+    let g = groups.get(key);
+    if (!g) groups.set(key, (g = { chars: 0, els: [] }));
+    g.chars += chars;
+    const x = g.els.find((y) => y.at === at && y.pseudo === pseudo);
+    if (x) x.chars += chars; else g.els.push({ at, pseudo, chars });
   }
+  let group = null;
+  for (const g of groups.values()) if (!group || g.chars > group.chars) group = g;
   let top = null;
-  for (const g of groups.values()) if (!top || g.chars > top.chars) top = g;
+  for (const x of group?.els ?? []) if (!top || x.chars > top.chars) top = x;
   const out = {
     width: harnessPx(r.width), height: harnessPx(r.height),
     overflow: getComputedStyle(e).display === "inline" ? "" : Math.max(0, e.scrollWidth - e.clientWidth),
@@ -217,7 +232,7 @@ const NORMALISE = {
   tex: texKey,
   code: (t) => t.replace(/\s+/g, ""),
   heading: (t) => t.replace(HEADING_TEX, (m, x) => `\uE000${texKey(x)}\uE001`).replace(/\s+/g, "").toLowerCase(),
-  label: (t) => t.trim().toLowerCase().replace(/^equation-/, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""),
+  label: (t) => t.replace(/\s+/g, " ").trim().toLowerCase(),
 };
 
 /** The rules, in words, for provenance.json. */
@@ -226,51 +241,76 @@ export const KEY_RULES = {
   tex: "the maths' TeX, with \\begin and \\end of split, equation, align, aligned, gather and gathered, \\tag{…}, \\label{…}, \\nonumber, \\notag, the spacing commands (\\, \; \\: \\! \\> and a backslash before a space; \\quad, \\qquad, \\thinspace and their kin; ~) and all whitespace removed; a line break \\\\ kept",
   code: "the code a cell or code block shows as its input (never its output, nor its line numbers), all whitespace removed",
   heading: "the heading's text without its number or permalink, each inline maths element in it replaced by its TeX normalised as the TeX rule does (so a heading with maths keys the same on both stacks), all whitespace removed, lower-cased",
-  label: "the id at the surface's own label site (the surface, or the wrapper the theme draws round it: Sphinx's div.math round a display, mystmd's block round one), and only where it is a label an author wrote in the page's source (lectures/<page>.md: (label)=, :label:, :name:, $$ … $$ (label), \\label{…}, a footnote's [^label]): so no generated id becomes a key, the same source gives the same key on both stacks and at every build, and no surface takes another's label. Lower-cased, Sphinx's `equation-` dropped, every run of other characters as `-`",
+  label: "the source label whose id is the one at the surface's own label site (the surface, or the wrapper the theme draws round it: Sphinx's div.math round a display, mystmd's block round one): a label an author wrote in the page's source (lectures/<page>.md: (label)=, :label:, :name:, a directive's YAML options' label: or name:, $$ … $$ (label), \\label{…}, a footnote's [^label]), and an id the stack gives that label (theme.mjs's labelIds: docutils' make_id, `equation-` for a display and the label as written on Sphinx; mystmd's createHtmlId on mystmd), and no other label; so no generated id becomes a key, no surface takes another's label, and the same source gives the same key on both stacks and at every build. The label as written, its whitespace collapsed, trimmed and lower-cased",
   hash: "<kind>:<the first 12 hexadecimal digits of the SHA-256 of the normalised text, as UTF-8>",
 };
 
 /**
- * The surface's key, `<kind>:<12 hex>`, from the first source that is not empty once normalised, a label only where
- * `labels` (the page's source labels, normalised) has it; "" for none.
+ * The surface's key, `<kind>:<12 hex>`, from the first source that is not empty once normalised; a label only where
+ * `sites` (labelSites: the ids the page's source labels take) has its id, as the source label it stands for; "" for
+ * none.
  */
-export function keyOf(source, labels = new Set()) {
+export function keyOf(source, sites = new Map()) {
   for (const kind of KEY_KINDS) {
     const raw = source?.[kind];
     if (typeof raw !== "string") continue;
-    const norm = NORMALISE[kind](raw);
-    if (!norm || (kind === "label" && !labels.has(norm))) continue;
+    const norm = kind === "label" ? (sites.get(raw) ?? "") : NORMALISE[kind](raw);
+    if (!norm) continue;
     return `${kind}:${createHash("sha256").update(norm, "utf8").digest("hex").slice(0, 12)}`;
   }
   return "";
 }
 
+/**
+ * A page's label sites: a Map from each id the stack gives one of the page's source labels (`idsOf`, theme.mjs's
+ * labelIds) to that label, normalised; an id that two different labels would take is left out (docutils makes
+ * `10-step` and `step` both `step`), so no surface takes a label that may be another's.
+ */
+export function labelSites(labels, idsOf = (l) => [l]) {
+  const by = new Map();
+  for (const l of labels ?? []) {
+    const label = labelOf(l);
+    if (!label) continue;
+    for (const id of new Set(idsOf(String(l)))) if (id) { if (!by.has(id)) by.set(id, new Set()); by.get(id).add(label); }
+  }
+  return new Map([...by].filter(([, s]) => s.size === 1).map(([id, s]) => [id, [...s][0]]));
+}
+
 // The labels an author writes in a MyST page: a target `(label)=`, a directive's `:label:` or `:name:`, an equation's
-// `$$ … $$ (label)`, a `\label{…}` in TeX, and a footnote's definition `[^label]:`
+// `$$ … $$ (label)`, a `\label{…}` in TeX, and a footnote's definition `[^label]:`; and, in a directive's options written
+// as YAML (a `---` block straight after its opening line), a `label:` or `name:` at any depth (a code cell's
+// `mystnb.figure.name`). A page's front matter is no directive's: its kernelspec `name:` is no label.
+const OPTION_BLOCK = /^[ \t]*(?:`{3,}|:{3,}|~{3,})\{[^}\n]+\}[^\n]*\n[ \t]*---[ \t]*\n([\s\S]*?)\n[ \t]*---[ \t]*$/gm;
+const OPTION_LABEL = /^[ \t]*(?:label|name):[ \t]*["']?([^"'\s]+)["']?[ \t]*$/gm;
 const LABEL_SYNTAX = [/^\s*\(([^()\s]+)\)=\s*$/gm, /^\s*:(?:label|name):\s*"?([^"\s]+)"?\s*$/gm, /\$\$\s*\(([^()\s]+)\)\s*$/gm, /\\label\{([^{}]+)\}/g, /^\[\^([^\]\s]+)\]:/gm];
 
-/** A label as the key compares it: the normalisation of `label` above. */
+/** A label as the key writes it: the normalisation of `label` above. */
 export const labelOf = (t) => NORMALISE.label(String(t));
 
-/** A page's source labels, normalised as the key normalises a label, from its MyST text. */
+/** A page's source labels, as written, from its MyST text. */
 export function labelsIn(text) {
   const out = new Set();
-  for (const re of LABEL_SYNTAX) for (const m of String(text).matchAll(re)) { const l = NORMALISE.label(m[1]); if (l) out.add(l); }
+  const add = (l) => { if (labelOf(l)) out.add(l); };
+  for (const re of LABEL_SYNTAX) for (const m of String(text).matchAll(re)) add(m[1]);
+  for (const b of String(text).matchAll(OPTION_BLOCK)) for (const m of b[1].matchAll(OPTION_LABEL)) add(m[1]);
   return out;
 }
 
 /**
- * Every page's source labels, from `<dir>/<page>.md`: { labels: { page: [label, …] }, missing: [page, …] }, a page
- * with no such file having none, and named in `missing` (no page of either corpus is a notebook today).
+ * Every page's source labels, from `<dir>/<page>.md`: { labels: { page: [label, …] }, missing: [page, …],
+ * unreadable: [{ page, why }, …] }. A page with no such file has none, and is named in `missing` (no page of either
+ * corpus is a notebook today); one whose file is there and cannot be read (EACCES, EISDIR, EIO, …) has none, and is
+ * named in `unreadable`.
  */
 export async function sourceLabels(dir, pages) {
-  const labels = {}, missing = [];
+  const labels = {}, missing = [], unreadable = [];
   for (const p of pages) {
-    const text = await readFile(join(dir, `${p}.md`), "utf8").catch(() => null);
-    if (text == null) missing.push(p);
-    labels[p] = [...labelsIn(text ?? "")].sort();
+    let text = "";
+    try { text = await readFile(join(dir, `${p}.md`), "utf8"); }
+    catch (e) { if (e?.code === "ENOENT") missing.push(p); else unreadable.push({ page: p, why: String(e?.message ?? e) }); }
+    labels[p] = [...labelsIn(text)].sort();
   }
-  return { labels, missing };
+  return { labels, missing, unreadable };
 }
 
 /** One row of metrics.csv, from a reading, a family, a surface, the page's body text and its source labels. */
@@ -388,9 +428,10 @@ export async function mathsEngines(page) {
 }
 
 /**
- * The fingerprint (design 6.3): SHA-256 of the installed fonts (fc-list's lines, each with its version and file), the
- * font files the pages' main frames loaded, and the fonts the measured text rendered with, sorted, one per line. It
- * is the run's union, so a run on fewer pages (--pages) fingerprints only what those pages used.
+ * The fingerprint (design 6.3): SHA-256 of the installed fonts (fc-list's lines, each with its family, style, version
+ * and file, and a hash of the file's bytes), the font files the pages' main frames loaded (each with a hash of its
+ * bytes), and the fonts the measured text rendered with, sorted, one per line. It is the union over the pages run, so
+ * a run on fewer pages (--pages) fingerprints only what those pages used.
  */
 export function fingerprint(rendered, files, installed = []) {
   const lines = [...[...installed].sort().map((f) => `installed ${f}`), ...[...files].sort().map((f) => `file ${f}`), ...[...rendered].sort().map((f) => `font ${f}`)];

@@ -6,8 +6,9 @@
 # (D19) a row of metrics.csv, not a red job. This job fails only when the harness itself does: the self-test reads its
 # fixtures wrongly (its expected metrics included), the site cannot be served, the locator or drawn table does not
 # parse, a check could not run (an `error` row; the rows are still written), or a drawn selector threw (its count is
-# written empty). A problem with the real run's metrics (a surface's measures or key source threw, a body text that
-# could not be read, metrics that do not tie to the counts) never fails it: it is a warning on the run, and is in
+# written empty). A problem with the real run's metrics (a surface's measures or key source threw, a body text, the
+# labels or the fonts that could not be read, a metrics.csv that could not be written, metrics that do not tie to the
+# counts) never fails it: it is a warning on the run, and is in
 # provenance.json and the step summary (QuantEcon/project-theme-parity#80, the owner's answer on 2026-11-28). Its rows,
 # counts and metrics (_harness/) are uploaded as this run's `harness` artefact either way, and the deploy job puts them
 # on the site, under /_harness/, only when this job succeeded, so a problem with the metrics never holds them back.

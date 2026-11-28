@@ -12,9 +12,11 @@ import { createHash } from "node:crypto";
 import { chromium } from "@playwright/test";
 import { SCHEMES } from "./csv.mjs";
 import { PAGE_VIEWPORTS, VIEWPORTS, SiteFault, countDrawn, countParts, describeCounts, fetchUrl, load, oneLine, partsOf, withTimeout } from "./util.mjs";
-import { bodyText, fontFile, labelOf, mathsEngines, measureDrawn, metricRow, renderedFonts } from "./visual.mjs";
+import { bodyText, fontFile, labelSites, mathsEngines, measureDrawn, metricRow, renderedFonts } from "./visual.mjs";
 
 const HYDRATION = /hydrat|did not match|server rendered HTML|Minified React error #(418|419|421|422|423|425)/i;
+// how long a page reading waits for its font files' bytes before it reads the fonts (each is a response the page had)
+const FONT_WAIT = 15_000;
 
 function watch(page) {
   const log = { console: [], pageErrors: [], failed: [] };
@@ -146,15 +148,23 @@ async function pageTask(browser, run, stem, viewport, scheme) {
   try {
     const page = await ctx.newPage();
     const w = watch(page);
-    const fontFiles = new Set(), frameFonts = new Set(), fontBodies = [];
+    // the font files the page loads, each with a hash of its bytes: one whose bytes cannot be read is listed by its
+    // address alone, and one that cannot be read at all is left out, each a fonts problem
+    const fontFiles = new Set(), frameFonts = new Set(), fontBodies = [], fontFaults = [];
     if (run.metrics) page.on("response", (r) => {
-      if (r.request().resourceType() !== "font") return;
+      let font = false;
+      try { font = r.request().resourceType() === "font"; } catch (e) { fontFaults.push(`a response could not be read, so a font it may be is left out: ${oneLine(e.message, 160)}`); }
+      if (!font) return;
       fontBodies.push((async () => {
+        let name = null;
         try {
-          const name = fontFile(r.url(), site);
-          const body = await r.body().catch(() => null);
-          (r.frame() === page.mainFrame() ? fontFiles : frameFonts).add(body ? `${name} sha256:${createHash("sha256").update(body).digest("hex").slice(0, 12)}` : name);
-        } catch {}
+          name = fontFile(r.url(), site);
+          let body = null, why = "no body";
+          try { body = await r.body(); } catch (e) { why = oneLine(e.message, 160); }
+          const main = r.frame() === page.mainFrame();
+          (main ? fontFiles : frameFonts).add(body ? `${name} sha256:${createHash("sha256").update(body).digest("hex").slice(0, 12)}` : name);
+          if (!body) fontFaults.push(`the font ${name}${main ? "" : " (in a frame)"} is listed by its address, not its bytes: ${why}`);
+        } catch (e) { fontFaults.push(`a font response could not be read, so it is left out${name ? ` (${name})` : ""}: ${oneLine(e.message, 160)}`); }
       })());
     });
     const nav = await load(page, site.url + theme.pagePath(stem));
@@ -194,7 +204,7 @@ async function pageTask(browser, run, stem, viewport, scheme) {
     if (run.metrics && drawn) {
       try { body = await bodyText(page, theme); } catch (e) { faults.push({ ...where, kind: "body text", family: null, n: null, why: `the body text could not be read: ${oneLine(e.message, 200)}` }); }
     }
-    const labels = new Set((run.labels?.[stem] ?? []).map(labelOf));
+    const labels = labelSites(run.labels?.[stem] ?? [], theme.labelIds);
     for (const f of drawn?.counted ?? []) {
       try {
         let c = null, measureError = null;
@@ -214,14 +224,20 @@ async function pageTask(browser, run, stem, viewport, scheme) {
         uncounted.push({ ...where, family: f.id, why: `the selector threw: ${oneLine(e.message, 200)}` });
       }
     }
-    // the fonts the measured text rendered with, and the maths engines; a failure to read them is recorded, and is no
-    // fault of the metrics
+    // the fonts the measured text rendered with, the font files' bytes (waited for FONT_WAIT ms at most) and the maths
+    // engines: each that cannot be read is a fonts problem, as the fingerprint is then incomplete
     let fonts = null;
     if (run.metrics && drawn) {
-      await Promise.allSettled(fontBodies);
+      const font = (why) => faults.push({ ...where, kind: "fonts", family: null, n: null, why });
+      let timer = null;
+      const settled = await Promise.race([Promise.allSettled(fontBodies).then(() => true), new Promise((r) => { timer = setTimeout(() => r(false), FONT_WAIT); })]);
+      clearTimeout(timer);
+      if (!settled) font(`the font files' bytes were not all read in ${FONT_WAIT / 1000} s, so the fingerprint may lack some`);
+      for (const why of fontFaults) font(why);
       fonts = { rendered: [], files: [...fontFiles], frames: [...frameFonts], engines: null, error: null };
       try { fonts.rendered = [...await renderedFonts(page)]; } catch (e) { fonts.error = oneLine(e.message, 200); }
       try { fonts.engines = await mathsEngines(page); } catch (e) { fonts.error ??= oneLine(e.message, 200); }
+      if (fonts.error) font(`the fonts the text rendered with, or the maths engines, could not be read: ${fonts.error}`);
     }
     return { rows, counts, uncounted, metrics, faults, fonts };
   } finally {
