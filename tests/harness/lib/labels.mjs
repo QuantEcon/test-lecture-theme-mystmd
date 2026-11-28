@@ -8,13 +8,13 @@
 // docutils' make_id (docutils/nodes.py), which gives a target's id from its label: lower-cased, the letters with no
 // decomposition and the digraphs below written in ASCII, the rest decomposed and kept to ASCII, every run of other
 // characters as `-`, and leading digits and hyphens and trailing hyphens dropped (`2d-plot` is `d-plot`)
-const ID_DIGRAPHS = { "ß": "sz", "æ": "ae", "œ": "oe", "ȸ": "db", "ȹ": "qp" };
+const ID_DIGRAPHS = { "\u00df": "sz", "\u00e6": "ae", "\u0153": "oe", "\u0238": "db", "\u0239": "qp" };
 const ID_LETTERS = {
-  "ø": "o", "đ": "d", "ħ": "h", "ı": "i", "ł": "l", "ŧ": "t", "ƀ": "b", "ƃ": "b",
-  "ƈ": "c", "ƌ": "d", "ƒ": "f", "ƙ": "k", "ƚ": "l", "ƞ": "n", "ƥ": "p", "ƫ": "t",
-  "ƭ": "t", "ƴ": "y", "ƶ": "z", "ǥ": "g", "ȥ": "z", "ȴ": "l", "ȵ": "n", "ȶ": "t",
-  "ȷ": "j", "ȼ": "c", "ȿ": "s", "ɀ": "z", "ɇ": "e", "ɉ": "j", "ɋ": "q", "ɍ": "r",
-  "ɏ": "y",
+  "\u00f8": "o", "\u0111": "d", "\u0127": "h", "\u0131": "i", "\u0142": "l", "\u0167": "t", "\u0180": "b", "\u0183": "b",
+  "\u0188": "c", "\u018c": "d", "\u0192": "f", "\u0199": "k", "\u019a": "l", "\u019e": "n", "\u01a5": "p", "\u01ab": "t",
+  "\u01ad": "t", "\u01b4": "y", "\u01b6": "z", "\u01e5": "g", "\u0225": "z", "\u0234": "l", "\u0235": "n", "\u0236": "t",
+  "\u0237": "j", "\u023c": "c", "\u023f": "s", "\u0240": "z", "\u0247": "e", "\u0249": "j", "\u024b": "q", "\u024d": "r",
+  "\u024f": "y",
 };
 export function docutilsId(label) {
   const id = [...String(label).toLowerCase()].map((c) => ID_DIGRAPHS[c] ?? c).map((c) => ID_LETTERS[c] ?? c).join("")
@@ -26,7 +26,7 @@ export function docutilsId(label) {
 // identifier, whitespace collapsed, quotes dropped, trimmed and lower-cased; and its html id, from that, every other
 // character as `-`, `id-` before a leading digit or hyphen, runs of `-` as one, and none at either end
 export function mystIdentifier(label) {
-  return String(label).replace(/[\t\n\r ]+/g, " ").replace(/['‘’"“”]+/g, "").trim().toLowerCase();
+  return String(label).replace(/[\t\n\r ]+/g, " ").replace(/['\u2018\u2019"\u201c\u201d]+/g, "").trim().toLowerCase();
 }
 export function mystHtmlId(identifier) {
   return String(identifier).toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/^([0-9-])/, "id-$1").replace(/-[-]+/g, "-").replace(/(?:^[-]+)|(?:[-]+$)/g, "");
