@@ -1,4 +1,4 @@
-# The self-test's drawn table: the format of ../drawn.yml, with ten of its entries. Eight carry this site's real
+# The self-test's drawn table: the format of ../drawn.yml, with eleven of its entries. Nine carry this site's real
 # selector, so the fixtures in good/ and bad/ are counted, and measured, as the real pages are; `math-inline` is null,
 # as it is there, so the self-test sees a family that writes no rows; and `figure` is given a selector the browser
 # cannot parse, so its count is never taken: empty on every page, no metrics, and run.mjs exits 1. Between them, on
@@ -18,7 +18,8 @@
 #   math-display        good math, two displays as KaTeX renders them, keyed by the TeX in their annotations
 #   heading-h1          the page titles of good typography and code-cells and bad code-cells, and good intro's
 #                       book title, which stands for a first page's title
-#   heading-h2          good typography, a heading whose two styles tie
+#   heading-h2          good typography, a heading whose two styles tie, and one with inline maths
+#   table               none on the fixtures: run.mjs's forced-fault run adds a bordered one
 # Every page where nothing matches is a row of 0; bad's missing page (long-cells) and its intro in dark, whose
 # scheme does not take effect, are empty. The counts are compared with expected-<site>-counts.csv, and the metrics
 # of every surface shown with expected-<site>-metrics.csv. The labels a key may take are selftest/labels.yml's.
@@ -47,6 +48,8 @@ families:
     selector: 'article h1, article:not(:has(h1)) [aria-label="Book title"]'
   - id: heading-h2
     selector: "article h2:has(> span.select-none)"
+  - id: table
+    selector: 'article table:not([data-name="outputs-container"] *)'
   - id: math-inline
     selector: null
     why: inline-maths

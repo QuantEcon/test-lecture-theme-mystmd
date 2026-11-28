@@ -8,6 +8,7 @@
 // This file is the same in QuantEcon/test-lecture-theme-sphinx and QuantEcon/test-lecture-theme-mystmd. What differs
 // between the two sites is in theme.mjs: how a page is addressed, how a colour scheme is set and checked, what an
 // error marker looks like, and how each feature's behaviour is exercised.
+import { createHash } from "node:crypto";
 import { chromium } from "@playwright/test";
 import { SCHEMES } from "./csv.mjs";
 import { PAGE_VIEWPORTS, VIEWPORTS, SiteFault, countDrawn, countParts, describeCounts, fetchUrl, load, oneLine, partsOf, withTimeout } from "./util.mjs";
@@ -132,8 +133,10 @@ async function featureTask(browser, run, f, scheme) {
 // throws gives that family an empty count, no metrics and an `uncounted` entry, which makes the run exit 1. `faults`
 // names each metrics problem, a warning that never fails the run, by kind: `measures` (a surface's measures threw: its row is written with them empty),
 // `key` (its source threw: its row has no key) and `body text` (the page's body text could not be read: its rows have
-// no body measures). `fonts` is what the measured text rendered with, the font files the page's main frame loaded and
-// those its frames loaded, and the maths engines, for provenance's environment.
+// no body measures). A measuring evaluation that throws for any other reason than its selector leaves the count to
+// countDrawn, as without metrics, and is a `measures` problem; the count is never lost to the metrics. `fonts` is
+// what the measured text rendered with, the font files the page's main frame loaded (each with the SHA-256 of its
+// bytes) and those its frames loaded, and the maths engines, for provenance's environment.
 async function pageTask(browser, run, stem, viewport, scheme) {
   const { theme, site, drawn } = run;
   const base = { page: stem, family: "page", viewport, scheme };
@@ -143,10 +146,16 @@ async function pageTask(browser, run, stem, viewport, scheme) {
   try {
     const page = await ctx.newPage();
     const w = watch(page);
-    const fontFiles = new Set(), frameFonts = new Set();
-    if (run.metrics) page.on("request", (q) => {
-      if (q.resourceType() !== "font") return;
-      try { (q.frame() === page.mainFrame() ? fontFiles : frameFonts).add(fontFile(q.url(), site)); } catch {}
+    const fontFiles = new Set(), frameFonts = new Set(), fontBodies = [];
+    if (run.metrics) page.on("response", (r) => {
+      if (r.request().resourceType() !== "font") return;
+      fontBodies.push((async () => {
+        try {
+          const name = fontFile(r.url(), site);
+          const body = await r.body().catch(() => null);
+          (r.frame() === page.mainFrame() ? fontFiles : frameFonts).add(body ? `${name} sha256:${createHash("sha256").update(body).digest("hex").slice(0, 12)}` : name);
+        } catch {}
+      })());
     });
     const nav = await load(page, site.url + theme.pagePath(stem));
     if (!nav.ok) {
@@ -188,10 +197,15 @@ async function pageTask(browser, run, stem, viewport, scheme) {
     const labels = new Set((run.labels?.[stem] ?? []).map(labelOf));
     for (const f of drawn?.counted ?? []) {
       try {
-        const c = run.metrics ? await measureDrawn(page, f.selector, theme) : await countDrawn(page, f.selector);
+        let c = null, measureError = null;
+        if (run.metrics) { try { c = await measureDrawn(page, f.selector, theme); } catch (e) { measureError = e; } }
+        // a selector that throws throws here too, as without metrics; then it is the count's fault, not the metrics'
+        c ??= await countDrawn(page, f.selector);
+        if (measureError) faults.push({ ...where, kind: "measures", family: f.id, n: null, why: `the measuring evaluation threw, so the family's surfaces have no rows: ${oneLine(measureError.message, 200)}` });
         counts.push({ ...where, family: f.id, drawn: c.drawn, shown: c.shown });
         for (const s of c.surfaces ?? []) {
-          metrics.push(metricRow(where, f.id, s, body, labels));
+          try { metrics.push(metricRow(where, f.id, s, body, labels)); }
+          catch (e) { faults.push({ ...where, kind: "measures", family: f.id, n: s.n, why: `the row could not be made: ${oneLine(e.message, 200)}` }); continue; }
           if (s.fault) faults.push({ ...where, kind: "measures", family: f.id, n: s.n, why: `the measures threw: ${oneLine(s.fault, 200)}` });
           if (s.keyFault) faults.push({ ...where, kind: "key", family: f.id, n: s.n, why: `the key's source threw: ${oneLine(s.keyFault, 200)}` });
         }
@@ -204,6 +218,7 @@ async function pageTask(browser, run, stem, viewport, scheme) {
     // fault of the metrics
     let fonts = null;
     if (run.metrics && drawn) {
+      await Promise.allSettled(fontBodies);
       fonts = { rendered: [], files: [...fontFiles], frames: [...frameFonts], engines: null, error: null };
       try { fonts.rendered = [...await renderedFonts(page)]; } catch (e) { fonts.error = oneLine(e.message, 200); }
       try { fonts.engines = await mathsEngines(page); } catch (e) { fonts.error ??= oneLine(e.message, 200); }

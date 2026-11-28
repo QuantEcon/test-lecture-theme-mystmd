@@ -121,9 +121,10 @@ export const countKeyOf = (r) => [r.page, r.family, r.viewport, r.scheme].join("
 //   key               the pairing key, `<kind>:<12 hex>` (tex, code, heading or label; visual.mjs), or empty for none
 //   width, height     the surface's box, CSS px
 //   column            the width of the page's body text, CSS px: the reference for `width`; empty with no body text
-//   overflow          scrollWidth − clientWidth, px: content wider than the box; empty for an inline box
+//   overflow          scrollWidth − clientWidth, px, at least 0: content wider than the box; empty for an inline box
 //   text              the tag holding the dominant text; empty, with the next five, when the surface shows no text
-//   font_size, line_height             the dominant text's, px, or `normal` as computed
+//   font_size, line_height             the dominant text's, px, or `normal` as computed; line_height empty for text
+//                     drawn as generated content (MathJax's glyphs), which a CSS line height does not describe
 //   body_font_size, body_line_height   the same for the page's body text, the reference for the two above
 //   colour, background                 `#rrggbb`: the dominant text's background, composited, and its colour over it
 //   contrast          the WCAG 2 ratio of the two, to two decimals
@@ -134,12 +135,51 @@ export const METRIC_COLUMNS = ["page", "family", "viewport", "scheme", "n", "key
 const NUM = /^\d+(\.\d{1,2})?$/;
 const RULES = {
   n: /^[1-9]\d*$/, key: /^((tex|code|heading|label):[0-9a-f]{12})?$/,
-  width: NUM, height: NUM, column: NUM, overflow: /^\d+$/, text: /^[A-Za-z][A-Za-z0-9-]*$/,
+  width: NUM, height: NUM, column: NUM, overflow: /^\d+$/, text: /^[A-Za-z][^\s"',<>/=]*$/,
   font_size: NUM, line_height: /^(\d+(\.\d{1,2})?|normal)$/, body_font_size: NUM, body_line_height: /^(\d+(\.\d{1,2})?|normal)$/,
   colour: /^#[0-9a-f]{6}$/, background: /^#[0-9a-f]{6}$/, contrast: /^\d+\.\d\d$/, crop: /^$/, sha256: /^$/,
 };
-const TEXT_GROUP = ["text", "font_size", "line_height", "colour", "background", "contrast"];
+const TEXT_GROUP = ["text", "font_size", "colour", "background", "contrast"];
 const BODY_GROUP = ["body_font_size", "body_line_height", "column"];
+
+/**
+ * The values of a metrics row that break the writer's rules: { columns, groups }, the columns whose value is not one
+ * the column takes, and the groups (the dominant text's, the body text's) taken in part. Empty lists for a sound row.
+ */
+export function metricRowFaults(r) {
+  const v = Object.fromEntries(METRIC_COLUMNS.map((c) => [c, r[c] == null ? "" : String(r[c])]));
+  const columns = Object.entries(RULES).filter(([c, re]) => v[c] !== "" && !re.test(v[c])).map(([c]) => c);
+  if (v.n === "") columns.push("n");
+  if (v.text === "" && v.line_height !== "") columns.push("line_height");
+  const groups = [TEXT_GROUP, BODY_GROUP].filter((g) => { const empty = g.filter((c) => v[c] === "" || columns.includes(c)); return empty.length && empty.length < g.length; });
+  return { columns, groups };
+}
+
+/**
+ * The rows as the writer takes them, and what it had to leave out: a value that is not one its column takes is
+ * written empty, and a group taken in part is written empty whole, each named in `problems` ({ row, why }), so a
+ * measure that comes out wrong is a problem with the metrics, never a writer that throws. A row whose reading is not
+ * one of the six, or that has no `n`, is dropped, and named.
+ */
+export function sanitiseMetricRows(rows) {
+  const out = [], problems = [];
+  for (const r of rows) {
+    const where = { page: r.page, family: r.family, viewport: r.viewport, scheme: r.scheme, n: r.n };
+    if (!PAGE_VIEWPORTS.includes(r.viewport) || !SCHEMES.includes(r.scheme) || !/^[1-9]\d*$/.test(String(r.n ?? ""))) {
+      problems.push({ ...where, why: `metrics.csv: a row for no reading of the six, or with no n, left out` });
+      continue;
+    }
+    const { columns, groups } = metricRowFaults(r);
+    if (!columns.length && !groups.length) { out.push(r); continue; }
+    const clean = { ...r };
+    for (const c of columns) clean[c] = "";
+    for (const g of groups) for (const c of g) clean[c] = "";
+    if (groups.includes(TEXT_GROUP)) clean.line_height = "";
+    problems.push({ ...where, why: `metrics.csv: ${[...columns.map((c) => `${c} "${r[c]}"`), ...groups.map((g) => `${g.join(", ")} taken in part`)].join("; ")}: not a value the column takes, written empty` });
+    out.push(clean);
+  }
+  return { rows: out, problems };
+}
 
 export function toMetricsCsv(rows) {
   const lines = [METRIC_COLUMNS.join(",")];
@@ -148,12 +188,8 @@ export function toMetricsCsv(rows) {
     if (!PAGE_VIEWPORTS.includes(r.viewport)) throw new Error(`${where}: viewport "${r.viewport}" is not one of ${PAGE_VIEWPORTS.join(", ")}`);
     if (!SCHEMES.includes(r.scheme)) throw new Error(`${where}: scheme "${r.scheme}" is not one of ${SCHEMES.join(", ")}`);
     const v = Object.fromEntries(METRIC_COLUMNS.map((c) => [c, r[c] == null ? "" : String(r[c])]));
-    for (const [c, re] of Object.entries(RULES)) if (v[c] !== "" && !re.test(v[c])) throw new Error(`${where}: ${c} "${v[c]}" is not ${re}`);
-    if (v.n === "") throw new Error(`${where}: no n`);
-    for (const group of [TEXT_GROUP, BODY_GROUP]) {
-      const empty = group.filter((c) => v[c] === "");
-      if (empty.length && empty.length < group.length) throw new Error(`${where}: ${group.join(", ")} are all taken or all empty; ${empty.join(", ")} empty`);
-    }
+    const { columns, groups } = metricRowFaults(r);
+    if (columns.length || groups.length) throw new Error(`${where}: ${[...columns.map((c) => `${c} "${v[c]}"`), ...groups.map((g) => `${g.join(", ")} taken in part`)].join("; ")} (sanitiseMetricRows first)`);
     lines.push(METRIC_COLUMNS.map((c) => field(v[c])).join(","));
   }
   return lines.join("\n") + "\n";

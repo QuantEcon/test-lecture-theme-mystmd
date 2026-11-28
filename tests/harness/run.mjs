@@ -8,11 +8,12 @@
 // repository root) and prints a summary. Exit 0: every check ran and every count was taken (failed checks are rows,
 // and counts and metrics are data, never a failed run). Exit 1: a check could not run (an `error` row: it threw, a
 // page did not load, or a colour scheme did not take effect), or a drawn selector threw; the CSVs are still written.
-// A problem with the metrics (a surface's measures or key source threw, a page's body text could not be read, or the
-// metrics do not tie to the counts) never fails the run: it is a warning on the run in GitHub Actions, and is in
-// provenance.json (`metrics.faults`, `metrics.tied_to_counts`) and the summary, so it never holds back what the deploy
-// publishes. Exit 2: nothing was checked (a bad argument, a locator or drawn table that does not parse, a site that
-// cannot be served).
+// A problem with the metrics (a surface's measures or key source threw, a measure is not a value its column takes, a
+// page's body text could not be read, the labels could not be read, the fonts could not be fingerprinted, metrics.csv
+// could not be written, or the metrics do not tie to the counts) never fails or stops the run: it is a warning on the
+// run in GitHub Actions, and is in provenance.json (`metrics.faults`, `metrics.not_tied`), which is always written,
+// and the summary, so it never holds back what the deploy publishes. Exit 2: nothing was checked (a bad argument, a
+// locator or drawn table that does not parse, a site that cannot be served).
 //
 // Options: --out DIR, --jobs N (default 4), --table FILE (default locators.yml), --drawn FILE (default drawn.yml),
 // --no-drawn (no counts, and so no metrics: no counts.csv or metrics.csv), --no-metrics (the counts without the
@@ -29,13 +30,13 @@ import { release } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
-import { toCsv, toCountsCsv, toMetricsCsv, CHECKS, RESULTS, SCHEMES } from "./lib/csv.mjs";
+import { toCsv, toCountsCsv, toMetricsCsv, sanitiseMetricRows, CHECKS, RESULTS, SCHEMES } from "./lib/csv.mjs";
 import { runChecks } from "./lib/engine.mjs";
 import { KEY_KINDS, KEY_RULES, fingerprint, sourceLabels, tieOf } from "./lib/visual.mjs";
 import YAML from "yaml";
 import { readDrawn, readTable } from "./lib/table.mjs";
 import { normaliseBase, serve } from "./lib/server.mjs";
-import { VIEWPORTS, PAGE_VIEWPORTS } from "./lib/util.mjs";
+import { VIEWPORTS, PAGE_VIEWPORTS, oneLine } from "./lib/util.mjs";
 import theme from "./theme.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -126,13 +127,20 @@ async function main() {
   const unknownPages = (o.pages ?? []).filter((p) => !order.includes(p));
   if (unknownPages.length) { console.error(`run.mjs: --pages names pages this site does not have: ${unknownPages.join(", ")}`); return 2; }
   const pages = o.pages ?? order;
-  // the labels a key may take: each page's source labels, or the file --labels gives
-  let labels, labelsFrom;
-  try {
-    if (o.labels) { labels = YAML.parse(await readFile(o.labels, "utf8")) ?? {}; labelsFrom = relative(REPO, o.labels); }
-    else { labels = await sourceLabels(join(REPO, "lectures"), order); labelsFrom = "lectures/<page>.md"; }
-    if (typeof labels !== "object" || Object.values(labels).some((v) => !Array.isArray(v))) throw new Error("not a mapping of pages to lists of labels");
-  } catch (e) { console.error(`run.mjs: the labels could not be read: ${e.message}`); return 2; }
+  // Everything the metrics need beyond the page loads is guarded the same way: a step that fails is a problem with the
+  // metrics (`runFaults`), recorded and warned of, and never a failed or stopped run, by the owner's answer on
+  // QuantEcon/project-theme-parity#80. First, the labels a key may take, read only when metrics are taken: each
+  // page's source labels, or the file --labels gives; unreadable, no label keys, and a `labels` problem.
+  const runFaults = [];
+  const runFault = (kind, why) => runFaults.push({ page: null, viewport: null, scheme: null, kind, family: null, n: null, why: oneLine(why, 300) });
+  let labels = {}, labelsFrom = null, labelsMissing = [];
+  if (measuring) {
+    try {
+      if (o.labels) { labels = YAML.parse(await readFile(o.labels, "utf8")) ?? {}; labelsFrom = relative(REPO, o.labels); }
+      else { ({ labels, missing: labelsMissing } = await sourceLabels(join(REPO, "lectures"), order)); labelsFrom = "lectures/<page>.md"; }
+      if (typeof labels !== "object" || Array.isArray(labels) || Object.values(labels).some((v) => !Array.isArray(v))) throw new Error("not a mapping of pages to lists of labels");
+    } catch (e) { labels = {}; runFault("labels", `the labels could not be read, so no surface has a label key: ${e.message}`); }
+  }
 
   let site, server = null;
   if (o.dir) {
@@ -168,12 +176,36 @@ async function main() {
 
   const require = createRequire(import.meta.url);
   const playwright = require("@playwright/test/package.json").version;
+  // the page loads' problems with the metrics, and the run's own, in one list
+  const allFaults = [...runFaults, ...(faults ?? [])];
+  const late = (kind, why) => { runFault(kind, why); allFaults.push(runFaults.at(-1)); };
+  // the rows as the writer takes them: a value that is not one its column takes is written empty, and a problem
+  let metricRows = metrics ?? [];
+  if (measuring) {
+    try {
+      const clean = sanitiseMetricRows(metricRows);
+      metricRows = clean.rows;
+      for (const x of clean.problems) allFaults.push({ page: x.page, viewport: x.viewport, scheme: x.scheme, kind: "measures", family: x.family, n: x.n, why: x.why });
+    } catch (e) { metricRows = []; late("writer", `the rows could not be checked, so none is written: ${e.message}`); }
+  }
   // the metrics against the counts: every reading's rows number its `shown`, or the metrics are not to be trusted
-  const tie = measuring ? tieOf(counts, metrics) : null;
-  const rendered = new Set((fonts ?? []).flatMap((f) => f.rendered)), files = new Set((fonts ?? []).flatMap((f) => f.files));
-  const frameFiles = new Set((fonts ?? []).flatMap((f) => f.frames));
-  const engines = (k) => [...new Set((fonts ?? []).map((f) => f.engines?.[k]).filter(Boolean))].sort();
-  const installed = measuring ? installedFonts() : null;
+  let tie = null;
+  if (measuring) {
+    try { tie = tieOf(counts, metricRows); }
+    catch (e) { tie = { ok: false, readings: 0, surfaces: 0, off: [`the tie could not be checked: ${oneLine(e.message, 200)}`] }; }
+  }
+  // the environment: a failure to read it is a problem with the metrics too
+  let rendered = new Set(), files = new Set(), frameFiles = new Set(), engines = () => [], installed = null, print = null;
+  if (measuring) {
+    try {
+      rendered = new Set((fonts ?? []).flatMap((f) => f.rendered ?? []));
+      files = new Set((fonts ?? []).flatMap((f) => f.files ?? []));
+      frameFiles = new Set((fonts ?? []).flatMap((f) => f.frames ?? []));
+      engines = (k) => [...new Set((fonts ?? []).map((f) => f.engines?.[k]).filter(Boolean))].sort();
+      installed = installedFonts();
+      print = fingerprint(rendered, files, installed?.lines ?? []);
+    } catch (e) { late("fonts", `the fonts could not be fingerprinted: ${e.message}`); }
+  }
   const provenance = {
     schema: 3,
     repository: process.env.GITHUB_REPOSITORY ?? theme.repository,
@@ -205,21 +237,23 @@ async function main() {
       uncounted,
     } : null,
     // the style metrics (D19): the theme facts they read, the key's rules, the rows and how they tie to the counts,
-    // and each surface whose measures threw; a reading not counted is not measured, so `drawn.uncounted` lists the
-    // readings not taken for both. Null when no metrics were taken (--no-metrics, or no counts)
+    // and each problem with them; a reading not counted is not measured, so `drawn.uncounted` lists the readings not
+    // taken for both. Null when no metrics were taken (--no-metrics, or no counts). fault_counts is set as the file is
+    // written, since the writer can add a problem of its own
     metrics: measuring ? {
       file: "metrics.csv",
       content: theme.content,
       body_text: theme.bodyText,
       glyphs: theme.glyphs ?? null,
       key: KEY_RULES,
-      labels: { from: labelsFrom, pages: Object.keys(labels).length, labels: Object.values(labels).reduce((n, l) => n + l.length, 0) },
-      rows: metrics.length,
+      labels: { from: labelsFrom, pages: Object.keys(labels).length, labels: Object.values(labels).reduce((n, l) => n + (Array.isArray(l) ? l.length : 0), 0), no_source: labelsMissing },
+      rows: metricRows.length,
       readings: { taken: tie.readings, of: pages.length * PAGE_VIEWPORTS.length * SCHEMES.length },
       tied_to_counts: tie.ok,
-      empty: emptyOf(metrics),
-      fault_counts: faultCounts(faults),
-      faults,
+      not_tied: tie.off,
+      empty: safeEmpty(metricRows),
+      fault_counts: null,
+      faults: allFaults,
       crops: null,
     } : null,
     // where the checks ran (decision 5): the runner's image, the operating system, the browser build, and the fonts
@@ -234,11 +268,11 @@ async function main() {
       browser: { name: "chromium", build: browserVersion, playwright, executable: process.env.HARNESS_CHROMIUM ? "HARNESS_CHROMIUM" : "the build @playwright/test installed" },
       // the fingerprint is the run's union, so a run on fewer pages (--pages) has its own
       fonts: measuring ? {
-        fingerprint: fingerprint(rendered, files, installed?.lines ?? []),
+        fingerprint: print,
         rendered: [...rendered].sort(),
         files: [...files].sort(),
         frame_files: [...frameFiles].sort(),
-        unread: fonts.filter((f) => f.error).length,
+        unread: (fonts ?? []).filter((f) => f?.error).length,
         installed: installed && { command: installed.command, count: installed.lines.length, sha256: installed.sha256 },
       } : null,
       maths: measuring ? { mathjax: engines("mathjax"), katex: engines("katex") } : null,
@@ -264,8 +298,18 @@ async function main() {
   // no counts taken, no counts.csv: one left by an earlier run would sit beside rows it does not belong to
   if (counting) await writeFile(join(o.out, "counts.csv"), toCountsCsv(counts));
   else await rm(join(o.out, "counts.csv"), { force: true });
-  if (measuring) await writeFile(join(o.out, "metrics.csv"), toMetricsCsv(metrics));
-  else await rm(join(o.out, "metrics.csv"), { force: true });
+  // the metrics: a writer that fails is a problem with the metrics, and leaves no metrics.csv; provenance.json is
+  // written whatever happened to them
+  let metricsWritten = false;
+  if (measuring) {
+    try { await writeFile(join(o.out, "metrics.csv"), toMetricsCsv(metricRows)); metricsWritten = true; }
+    catch (e) { late("writer", `metrics.csv could not be written: ${e.message}`); }
+  }
+  if (!metricsWritten) {
+    await rm(join(o.out, "metrics.csv"), { force: true }).catch(() => {});
+    provenance.outputs = provenance.outputs.filter((f) => f !== "metrics.csv");
+  }
+  if (provenance.metrics) provenance.metrics.fault_counts = faultCounts(allFaults);
   await writeFile(join(o.out, "provenance.json"), JSON.stringify(provenance, null, 2) + "\n");
 
   const tally = {};
@@ -276,8 +320,10 @@ async function main() {
   // a selector that threw is a harness fault, as an error row is; a page not loaded already gave its error rows
   const threw = uncounted.filter((u) => u.family);
   const countLines = counting ? countsSummary(counts, uncounted, drawn, pages) : [`No counts taken (${o.noDrawn ? "--no-drawn" : "--no-pages"}): no counts.csv.`];
-  const metricLines = measuring ? metricsSummary(metrics, tie, faults, provenance, drawn)
-    : [`No metrics taken (${!counting ? "no counts" : "--no-metrics"}): no metrics.csv.`];
+  let metricLines;
+  try {
+    metricLines = measuring ? metricsSummary(metricRows, tie, allFaults, provenance, drawn) : [`No metrics taken (${!counting ? "no counts" : "--no-metrics"}): no metrics.csv.`];
+  } catch (e) { metricLines = [`metrics.csv: ${metricRows.length} rows; ${allFaults.length} problem(s) with the metrics; the summary could not be made (${oneLine(e.message, 200)})`]; }
   const summary = [`${rows.length} rows written to ${join(o.out, "rendered.csv")} (${site.url}).`, "", ...lines, "",
     ...(errors.length ? [`${errors.length} check(s) could not run:`, ...errors.map((r) => `- ${r.page} ${r.family} ${r.check} ${r.viewport} ${r.scheme}: ${r.detail}`)] : ["Every check ran."]),
     "", ...countLines,
@@ -291,14 +337,22 @@ async function main() {
   if (process.env.GITHUB_ACTIONS === "true") console.log(`::notice title=Style metrics::${escape(metricLines.join("\n").slice(0, 4000))}`);
   // the metrics' problems, as a warning on the run: they never fail it (QuantEcon/project-theme-parity#80, the
   // owner's answer on 2026-11-28), so a problem with the metrics never withholds /_harness/, counts.csv included
-  const problems = measuring ? faults.length + (tie.ok ? 0 : tie.off.length) : 0;
-  if (process.env.GITHUB_ACTIONS === "true" && problems) console.log(`::warning title=Style metrics problems::${escape([`${problems} problem(s) with the metrics:`, ...(tie.ok ? [] : [`${tie.off.length} reading(s) do not tie to counts.csv: ${tie.off.slice(0, 12).join("; ")}`]), ...faults.slice(0, 20).map((x) => `${x.kind}: ${x.page} ${x.family ?? ""} ${x.viewport} ${x.scheme}${x.n ? ` n ${x.n}` : ""}: ${x.why}`)].join("\n").slice(0, 4000))}`);
+  const problems = measuring ? allFaults.length + (tie.ok ? 0 : tie.off.length) : 0;
+  if (process.env.GITHUB_ACTIONS === "true" && problems) console.log(`::warning title=Style metrics problems::${escape([`${problems} problem(s) with the metrics:`, ...(tie.ok ? [] : [`${tie.off.length} reading(s) do not tie to counts.csv: ${tie.off.slice(0, 12).join("; ")}`]), ...allFaults.slice(0, 20).map(faultWords)].join("\n").slice(0, 4000))}`);
   return errors.length || threw.length ? 1 : 0;
+}
+
+/** A problem with the metrics, in words. */
+const faultWords = (x) => `${x.kind}: ${x.page ? `${x.page} ${x.family ?? "(body text)"} ${x.viewport} ${x.scheme}${x.n ? ` n ${x.n}` : ""}` : "(the run)"}: ${x.why}`;
+
+/** emptyOf, or nothing where it cannot be counted. */
+function safeEmpty(rows) {
+  try { return emptyOf(rows); } catch { return null; }
 }
 
 /** How many metrics problems of each kind. */
 function faultCounts(faults) {
-  const out = { measures: 0, key: 0, "body text": 0 };
+  const out = { measures: 0, key: 0, "body text": 0, labels: 0, fonts: 0, writer: 0 };
   for (const f of faults) out[f.kind] = (out[f.kind] ?? 0) + 1;
   return out;
 }
@@ -323,14 +377,14 @@ function metricsSummary(metrics, tie, faults, provenance, drawn) {
   const e = emptyOf(metrics);
   const families = new Set(metrics.map((m) => m.family)).size;
   const noBody = [...new Set(metrics.filter((m) => m.body_font_size === "").map((m) => `${m.page} ${m.viewport} ${m.scheme}`))];
-  const env = provenance.environment, f = env.fonts;
+  const env = provenance.environment, f = env.fonts ?? { fingerprint: "", rendered: [], files: [], frame_files: [], unread: 0, installed: null };
   return [
     `metrics.csv: ${metrics.length} rows over ${tie.readings} of ${provenance.metrics.readings.of} readings (${provenance.metrics.readings.of / (PAGE_VIEWPORTS.length * SCHEMES.length)} pages × ${PAGE_VIEWPORTS.length * SCHEMES.length}), ${families} of the ${drawn.counted.length} counted families with a shown surface; `
       + (tie.ok ? `every reading's rows number its shown in counts.csv (${tie.surfaces} surfaces).` : `${tie.off.length} reading(s) do not tie to counts.csv's shown: ${tie.off.slice(0, 6).join("; ")}${tie.off.length > 6 ? "; …" : ""}`),
     `Keys: ${kinds.join(", ")}; none, so paired by n: ${e.key}.`,
     `Empty values: text ${e.text} (no visible text), overflow ${e.overflow} (an inline box), body text ${e.body_text}${noBody.length ? ` (${noBody.slice(0, 6).join("; ")}${noBody.length > 6 ? "; …" : ""})` : ""}, every measure ${e.measures}.`,
-    faults.length ? `Metrics problems: ${faults.length} (${Object.entries(faultCounts(faults)).map(([k, n]) => `${k} ${n}`).join(", ")}): ${faults.slice(0, 6).map((x) => `${x.page} ${x.family ?? "(body text)"} ${x.viewport} ${x.scheme}${x.n ? ` n ${x.n}` : ""}: ${x.why}`).join("; ")}${faults.length > 6 ? "; …" : ""}` : "Metrics problems: none (every surface measured and keyed, every body text read).",
-    `Environment: ${env.runner.image_os ?? "no runner image"} ${env.runner.image_version ?? ""}`.trimEnd() + `${env.os_release ? `, ${env.os_release}` : ""}, chromium ${env.browser.build}${env.maths.mathjax.length ? `, MathJax ${env.maths.mathjax.join(", ")}` : ""}${env.maths.katex.length ? `, KaTeX ${env.maths.katex.join(", ")}` : ""}; fonts ${f.fingerprint.slice(0, 12)} (${f.rendered.length} rendered, ${f.files.length} font files in the main frames${f.frame_files.length ? `, ${f.frame_files.length} in frames, not fingerprinted` : ""}${f.unread ? `, ${f.unread} reading(s) unread` : ""}${f.installed ? `; installed ${f.installed.count}, ${f.installed.sha256.slice(0, 12)}` : "; no fc-list"}).`,
+    faults.length ? `Metrics problems: ${faults.length} (${Object.entries(faultCounts(faults)).filter(([k, n]) => n || ["measures", "key", "body text"].includes(k)).map(([k, n]) => `${k} ${n}`).join(", ")}): ${faults.slice(0, 6).map(faultWords).join("; ")}${faults.length > 6 ? "; …" : ""}` : "Metrics problems: none (every surface measured and keyed, every body text read).",
+    `Environment: ${env.runner.image_os ?? "no runner image"} ${env.runner.image_version ?? ""}`.trimEnd() + `${env.os_release ? `, ${env.os_release}` : ""}, chromium ${env.browser.build}${env.maths.mathjax.length ? `, MathJax ${env.maths.mathjax.join(", ")}` : ""}${env.maths.katex.length ? `, KaTeX ${env.maths.katex.join(", ")}` : ""}; fonts ${String(f.fingerprint ?? "").slice(0, 12) || "unread"} (${f.rendered.length} rendered, ${f.files.length} font files in the main frames${f.frame_files.length ? `, ${f.frame_files.length} in frames, not fingerprinted` : ""}${f.unread ? `, ${f.unread} reading(s) unread` : ""}${f.installed ? `; installed ${f.installed.count}, ${f.installed.sha256.slice(0, 12)}` : "; no fc-list"}).`,
     `Web fonts rendered: ${[...new Set(f.rendered.filter((x) => x.endsWith(", web")).map((x) => x.replace(/ \(.*$/, "")))].join(", ") || "none"}.`,
   ];
 }

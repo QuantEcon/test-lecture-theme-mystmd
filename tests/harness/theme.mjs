@@ -42,7 +42,8 @@ const profile = {
  * `code`, the input of the cell the surface is or lies in (its code block, not one in its outputs), or that a
  * dropdown folding a whole cell holds (hide-cell), or of the code block it is or lies in, without the line numbers
  * the highlighter writes into it; `heading`, a heading's text without its number or permalink (the theme's
- * `.heading-text` where it writes one; a page title's number, "2. ", is plain text before it), or the book's title
+ * `.heading-text` where it writes one; a page title's number, "2. ", is plain text before it; each inline maths
+ * element replaced by the TeX in KaTeX's annotation between U+E000 and U+E001), or the book's title
  * where the first page has no title of its own; `label`, the id at the surface's own label site, the surface itself
  * or, for a display, the block mystmd puts its label on (two levels up), with the `fn-` mystmd puts before a
  * footnote's label dropped. The engine keeps a label only where the page's source has it, so mystmd's generated ids
@@ -63,12 +64,16 @@ function sourceOf(e, root) {
     out.code = c.textContent;
   }
   if (/^H[1-6]$/.test(e.tagName)) {
+    const maths = (h) => {
+      for (const k of h.querySelectorAll(".katex")) k.replaceWith(`\uE000${k.querySelector('annotation[encoding="application/x-tex"]')?.textContent ?? ""}\uE001`);
+      return h;
+    };
     const text = e.querySelector(".heading-text");
-    if (text) out.heading = text.textContent;
+    if (text) out.heading = maths(text.cloneNode(true)).textContent;
     else {
       const h = e.cloneNode(true);
       for (const x of h.querySelectorAll(".select-none, a[aria-label]")) x.remove();
-      out.heading = h.textContent.replace(/^\s*\d+(?:\.\d+)*\.\s+/, "");
+      out.heading = maths(h).textContent.replace(/^\s*\d+(?:\.\d+)*\.\s+/, "");
     }
   } else if (e.matches('[aria-label="Book title"]')) out.heading = e.textContent;
   const site = e.matches(".katex-display") ? e.parentElement?.parentElement : e;

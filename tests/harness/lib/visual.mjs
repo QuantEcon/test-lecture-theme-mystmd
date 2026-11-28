@@ -101,13 +101,16 @@ export function harnessContent(c) {
 
 /**
  * One shown surface's measures. Runs in the page. The box: its width and height (CSS px), and its overflow
- * (scrollWidth − clientWidth: content wider than the box; empty for an inline box, which has no client width). The
+ * (scrollWidth − clientWidth, at least 0: content wider than the box; Chrome gives a bordered table a client width
+ * past its scroll width, which is no overflow; empty for an inline box, which has no client width). The
  * dominant text: of what the surface draws as text (its text nodes, and the `::before` content of any element that
  * `glyphs` names: MathJax draws its glyphs so), leaving out what is hidden (checkVisibility(), then harnessHidden),
  * grouped by the colour, font size, font family and weight it is drawn in, the group with the most characters
  * (harnessChars; the first in document order on a tie), read on the first element that draws it: its tag, font size
- * and line height, and its colour, background and contrast (harnessPaint). A surface that draws no text has these
- * empty. The element that draws the dominant text is kept in `window.__harnessText`, for the font fingerprint.
+ * and line height, and its colour, background and contrast (harnessPaint). Text drawn as generated content has no
+ * line height: MathJax sets its glyphs' to 0 and places them by padding, so a CSS line height does not describe them,
+ * and the column is left empty. A surface that draws no text has these empty. The element that draws the dominant
+ * text is kept in `window.__harnessText`, for the font fingerprint.
  */
 export function harnessMeasure(e, kit, glyphs) {
   const r = e.getBoundingClientRect();
@@ -132,12 +135,12 @@ export function harnessMeasure(e, kit, glyphs) {
   for (const g of groups.values()) if (!top || g.chars > top.chars) top = g;
   const out = {
     width: harnessPx(r.width), height: harnessPx(r.height),
-    overflow: getComputedStyle(e).display === "inline" ? "" : e.scrollWidth - e.clientWidth,
+    overflow: getComputedStyle(e).display === "inline" ? "" : Math.max(0, e.scrollWidth - e.clientWidth),
     text: "", font_size: "", line_height: "", colour: "", background: "", contrast: "",
   };
   if (top) {
     const s = getComputedStyle(top.at, top.pseudo);
-    Object.assign(out, { text: top.at.tagName.toLowerCase(), font_size: harnessPx(s.fontSize), line_height: harnessPx(s.lineHeight), ...kit.paint(top.at, top.pseudo) });
+    Object.assign(out, { text: top.at.tagName.toLowerCase(), font_size: harnessPx(s.fontSize), line_height: top.pseudo ? "" : harnessPx(s.lineHeight), ...kit.paint(top.at, top.pseudo) });
     (window.__harnessText ??= new Map()).set(top.at, top.pseudo ? "before" : "text");
   }
   return out;
@@ -150,7 +153,8 @@ export function harnessMeasure(e, kit, glyphs) {
 const SURFACES = (sourceOf) => inPage((els, { filter, content, glyphs }) => {
   const kept = harnessFiltered(els, filter);
   const kit = harnessPaint();
-  const root = document.querySelector(content);
+  let root = null;
+  try { root = document.querySelector(content); } catch {}
   const surfaces = [];
   let shown = 0;
   kept.forEach((e, i) => {
@@ -206,10 +210,13 @@ export const KEY_KINDS = ["tex", "code", "heading", "label"];
 // \tag, \label, \nonumber and \notag, the spacing commands, and whitespace, removed; a line break `\\` kept
 const TEX_WRAP = /\\(?:begin|end)\{(?:split|equation\*?|align\*?|aligned|gather\*?|gathered)\}/g;
 const TEX_DROP = /\\\\|\\(?:tag|label)\*?\{[^{}]*\}|\\(?:nonumber|notag|quad|qquad|thinspace|medspace|thickspace|enspace|negthinspace)(?![A-Za-z])|\\[,;:!> ]|~/g;
+const texKey = (t) => t.replace(TEX_WRAP, "").replace(TEX_DROP, (m) => (m === "\\\\" ? m : "")).replace(/\s+/g, "");
+// a heading's inline maths, which each theme's sourceOf writes as its TeX between U+E000 and U+E001
+const HEADING_TEX = /\uE000([\s\S]*?)\uE001/g;
 const NORMALISE = {
-  tex: (t) => t.replace(TEX_WRAP, "").replace(TEX_DROP, (m) => (m === "\\\\" ? m : "")).replace(/\s+/g, ""),
+  tex: texKey,
   code: (t) => t.replace(/\s+/g, ""),
-  heading: (t) => t.replace(/\s+/g, "").toLowerCase(),
+  heading: (t) => t.replace(HEADING_TEX, (m, x) => `\uE000${texKey(x)}\uE001`).replace(/\s+/g, "").toLowerCase(),
   label: (t) => t.trim().toLowerCase().replace(/^equation-/, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""),
 };
 
@@ -218,7 +225,7 @@ export const KEY_RULES = {
   order: "the first of the surface's TeX, code, heading text and label that is there and not empty once normalised (theme.mjs's sourceOf says where each sits); none: empty, and the surface pairs by `n`",
   tex: "the maths' TeX, with \\begin and \\end of split, equation, align, aligned, gather and gathered, \\tag{…}, \\label{…}, \\nonumber, \\notag, the spacing commands (\\, \; \\: \\! \\> and a backslash before a space; \\quad, \\qquad, \\thinspace and their kin; ~) and all whitespace removed; a line break \\\\ kept",
   code: "the code a cell or code block shows as its input (never its output, nor its line numbers), all whitespace removed",
-  heading: "the heading's text without its number or permalink, all whitespace removed, lower-cased (a heading with inline maths reads its maths' text, which the two stacks write differently, so it does not pair)",
+  heading: "the heading's text without its number or permalink, each inline maths element in it replaced by its TeX normalised as the TeX rule does (so a heading with maths keys the same on both stacks), all whitespace removed, lower-cased",
   label: "the id at the surface's own label site (the surface, or the wrapper the theme draws round it: Sphinx's div.math round a display, mystmd's block round one), and only where it is a label an author wrote in the page's source (lectures/<page>.md: (label)=, :label:, :name:, $$ … $$ (label), \\label{…}, a footnote's [^label]): so no generated id becomes a key, the same source gives the same key on both stacks and at every build, and no surface takes another's label. Lower-cased, Sphinx's `equation-` dropped, every run of other characters as `-`",
   hash: "<kind>:<the first 12 hexadecimal digits of the SHA-256 of the normalised text, as UTF-8>",
 };
@@ -252,11 +259,18 @@ export function labelsIn(text) {
   return out;
 }
 
-/** Every page's source labels, from `<dir>/<page>.md`: { page: [label, …] }; a page with no such file has none. */
+/**
+ * Every page's source labels, from `<dir>/<page>.md`: { labels: { page: [label, …] }, missing: [page, …] }, a page
+ * with no such file having none, and named in `missing` (no page of either corpus is a notebook today).
+ */
 export async function sourceLabels(dir, pages) {
-  const out = {};
-  for (const p of pages) out[p] = [...labelsIn(await readFile(join(dir, `${p}.md`), "utf8").catch(() => ""))].sort();
-  return out;
+  const labels = {}, missing = [];
+  for (const p of pages) {
+    const text = await readFile(join(dir, `${p}.md`), "utf8").catch(() => null);
+    if (text == null) missing.push(p);
+    labels[p] = [...labelsIn(text ?? "")].sort();
+  }
+  return { labels, missing };
 }
 
 /** One row of metrics.csv, from a reading, a family, a surface, the page's body text and its source labels. */

@@ -10,7 +10,8 @@ article main p{font-size:18px} .qe-collapse--input .qe-collapse__body{max-height
 /* the metrics (D19): each measured box pinned in px, so the expected metrics hold whatever the platform's fonts */
 .prose-qetext-light p.narrow{margin-right:200px}
 article main h1{margin:0;height:40px;font-size:32px;line-height:40px} h2{margin:0;height:32px;font-size:24px;line-height:32px;color:rgba(0,0,0,.6)}
-.select-none{color:#888888} h2 a[aria-label]{color:#999999} h2 code{font:20px monospace}
+.select-none{color:#888888} h2 a[aria-label]{color:#999999} h2 code{font:20px monospace} article main p.lede{background:#fafafa}
+.katex .katex-mathml{position:absolute;clip:rect(1px,1px,1px,1px);padding:0;border:0;height:1px;width:1px;overflow:hidden}
 #selftest-sol-1{height:120px;background:rgba(0,0,255,.2)} #selftest-sol-1 .myst-exercise-title{font-size:14px;font-weight:700;color:#555555}
 #selftest-sol-1 .myst-exercise-body p{margin:0;font-size:15px;line-height:24px;color:#333333} .cite-group.parenthetical{display:inline-block;width:200px;height:24px}</style></head>
 <body>
@@ -24,12 +25,18 @@ article main h1{margin:0;height:40px;font-size:32px;line-height:40px} h2{margin:
 <h1 class="pt-12 m-0">2<!-- -->. <!-- -->Typography</h1>
 <!-- the metrics: the body text, a paragraph in one of the theme's prose blocks, and a second, set narrower: the body
      text is the first -->
-<div class="prose-qetext-light"><p>A paragraph of lecture text, long enough to measure, with <a href="../">a link</a>.</p>
+<!-- the metrics: the first paragraph sits on a background of its own, so dark-palette's page colour is the content
+     root's and not the paragraph's -->
+<div class="prose-qetext-light"><p class="lede">A paragraph of lecture text, long enough to measure, with <a href="../">a link</a>.</p>
 <p class="narrow">A second paragraph of lecture text, set narrower than the first.</p></div>
 <h2 id="lists" class="relative group"><span class="mr-3 select-none">2.1</span><span class="heading-text">Lists <code>ab12c</code></span><a class="no-underline select-none" href="#lists" title="Link to this Section" aria-label="Link to this Section">¶</a></h2>
 <!-- the drawn counts: two citations, one parenthetical (in the solution below); an exercise and its solution, which the
      solution selector's text filter tells apart by their headers -->
 <p>As <span class="cite-group narrative"><cite data-state="closed"><span class="hover-link">Keynes (1940)</span></cite></span> argued.</p>
+<!-- the metrics: a section heading with inline maths, keyed by its text with the maths as the TeX in KaTeX's
+     annotation, as the Sphinx corpus's is from MathJax's math list: the same key. The first section heading's id,
+     `lists`, is a source label, and its key is its text, a heading before a label -->
+<h2 id="sums-over-x-i" class="relative group"><span class="mr-3 select-none">2.2</span><span class="heading-text">Sums over <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>x</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">x_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="mord mathnormal mtight">i</span></span></span></span></span></span></span><a class="no-underline select-none" href="#sums-over-x-i" title="Link to this Section" aria-label="Link to this Section">¶</a></h2>
 <aside id="selftest-ex-1" class="myst-exercise"><div class="myst-exercise-header"><div class="myst-exercise-title"><a href="#selftest-ex-1" title="Link to this Exercise">Exercise<!-- --> <!-- -->1</a></div></div><div class="myst-exercise-body"><p>Show that it holds.</p></div></aside>
 <!-- the metrics: the solution's title is its first text and its answer its dominant text, set smaller than the box, on a
      translucent background composited over the page's (in dark, a pair below 4.5:1). Its id is its label, as the
