@@ -288,6 +288,7 @@ async function unitChecks() {
   eq("key: a heading, its whitespace removed and lower-cased", [surfaceKey({ heading: "Lists ab12c" }), surfaceKey({ heading: " LISTS  AB12C " })], ["heading:6aebc406e6d3", "heading:6aebc406e6d3"]);
   eq("key: a label, normalised, and only one the page's source has", [surfaceKey({ label: "equation-Eq:Cagan_Demand" }, L), surfaceKey({ label: "id1" }, L), surfaceKey({ label: "eq-cagan-demand" })], ["label:9de743c9815c", "", ""]);
   eq("key: TeX before code, heading and label", surfaceKey({ tex: "x", code: "y", heading: "z", label: "eq-cagan-demand" }, L), "tex:2d711642b726");
+  eq("key: code before heading, and heading before label", [surfaceKey({ code: "y", heading: "z", label: "eq-cagan-demand" }, L), surfaceKey({ heading: "z", label: "eq-cagan-demand" }, L)], ["code:a1fce4363854", "heading:594e519ae499"]);
   eq("key: a source empty once normalised gives way to the next", [surfaceKey({ code: " \n ", label: "eq-cagan-demand" }, L), surfaceKey({ tex: "\\, ~", heading: "Lists" })], ["label:9de743c9815c", "heading:4c14c4a453f9"]);
   eq("labels: a MyST page's targets, :label: and :name:, equation labels, \\label and footnotes",
     [...labelsIn("(Sec_One)=\n# Head\n:label: Short_Path_Ex1\n:name: \"flow_fig\"\n$$\nx \\label{a:y0}\n$$ (eq:cagan_demand)\n[^footnote-1]: x\nnot a (label)= here")].sort(),
@@ -391,16 +392,22 @@ const quietEnv = (extra = {}) => { const env = { ...process.env, ...extra }; del
 // and holds two values that once stopped the writer: the content root's own querySelectorAll, which only the body
 // text's reading calls, throws (six body-text faults), and so does the solution box's scrollWidth, which only its
 // measures read (six measure faults); and a bordered table, to which Chrome gives a client width past its scroll width,
-// draws its text in an element whose tag has a `.` and a `_`. With the drawn table less the selector that throws (so no
-// count fails the run), run.mjs must exit 0, print the "Style metrics problems" warning and the problems in its
-// summary, record the twelve faults in provenance.json, and write every row: the solution's without its measures, the
-// table's with an overflow of 0 and the odd tag, and none with body measures.
+// draws its text in an element whose tag has a `.` and a `_`, and whose computed line height is forced to a value the
+// column does not take (six more measure faults, from the writer's rules). With the drawn table less the selector that
+// throws (so no count fails the run), run.mjs must exit 0, print the "Style metrics problems" warning and the problems
+// in its summary, record the eighteen faults in provenance.json, and write every row: the solution's without its
+// measures, the table's with an overflow of 0, the odd tag and no line height, and none with body measures.
 const FAULT_BOX = theme.side === "sphinx" ? ".solution" : "#selftest-sol-1";
 const ODD_TAG = "x-odd.tag_1";
 const FAULT_TABLE = `<table class="docutils" border="1" style="border:2px solid #000000;border-collapse:separate;width:300px;height:40px"><tbody><tr><td><${ODD_TAG}>the text this table draws, in an element whose tag is odd</${ODD_TAG}></td></tr></tbody></table>`;
 const FAULT_SCRIPT = `<script>/* the self-test's forced problems with the metrics: the body text cannot be read, nor the solution's measures */
 document.querySelector(${JSON.stringify(theme.content)}).querySelectorAll = () => { throw new Error("a body text that cannot be read, forced by the self-test"); };
-for (const e of document.querySelectorAll(${JSON.stringify(FAULT_BOX)})) Object.defineProperty(e, "scrollWidth", { get() { throw new Error("a measure that throws, forced by the self-test"); } });</script>`;
+for (const e of document.querySelectorAll(${JSON.stringify(FAULT_BOX)})) Object.defineProperty(e, "scrollWidth", { get() { throw new Error("a measure that throws, forced by the self-test"); } });
+{ const odd = document.querySelector(${JSON.stringify(ODD_TAG.replace(".", "\\."))}), style = window.getComputedStyle;
+  window.getComputedStyle = function (e, pseudo) {
+    const s = style.call(window, e, pseudo);
+    return e !== odd || pseudo ? s : new Proxy(s, { get(t, k) { if (k === "lineHeight") return "forced"; const v = Reflect.get(t, k); return typeof v === "function" ? v.bind(t) : v; } });
+  }; }</script>`;
 async function faultCheck(goodDir, base) {
   const work = await mkdtemp(join(tmpdir(), "harness-selftest-fault-"));
   const problems = [];
@@ -414,14 +421,15 @@ async function faultCheck(goodDir, base) {
       "--only", "header-title", "--pages", DRAWN_PAGE, "--quiet", "--out", out], quietEnv({ GITHUB_ACTIONS: "true" }));
     if (r.status !== 0) problems.push(`expected exit 0, a problem with the metrics being a warning, got ${r.status} (${(r.stderr || r.stdout).trim().split("\n").pop()})`);
     if (!r.stdout.includes("::warning title=Style metrics problems::")) problems.push("expected the \"Style metrics problems\" warning on stdout, and found none");
-    if (!/Metrics problems: 12 \(measures 6, key 0, body text 6\)/.test(r.stdout)) problems.push(`expected the summary to give 6 measure and 6 body-text problems, got ${JSON.stringify(r.stdout.split("\n").find((l) => l.startsWith("Metrics problems")) ?? "no such line")}`);
+    if (!/Metrics problems: 18 \(measures 12, key 0, body text 6\)/.test(r.stdout)) problems.push(`expected the summary to give 12 measure and 6 body-text problems, got ${JSON.stringify(r.stdout.split("\n").find((l) => l.startsWith("Metrics problems")) ?? "no such line")}`);
     const prov = JSON.parse(await readFile(join(out, "provenance.json"), "utf8").catch(() => "null"));
     if (!prov) problems.push("expected provenance.json, and found none");
     const m = prov?.metrics, faults = m?.faults ?? [];
     const body = faults.filter((f) => f.kind === "body text"), measures = faults.filter((f) => f.kind === "measures");
-    if (m?.fault_counts?.["body text"] !== 6 || m?.fault_counts?.measures !== 6 || faults.length !== 12 || m?.tied_to_counts !== true || m?.not_tied?.length !== 0
-      || body.some((f) => f.family !== null || !/body text that cannot be read, forced/.test(f.why)) || measures.some((f) => f.family !== "solution" || !/measure that throws, forced/.test(f.why)))
-      problems.push(`expected provenance metrics to record six body-text and six measure faults, tied to the counts, got ${JSON.stringify({ fault_counts: m?.fault_counts, faults: faults.slice(0, 2), tied: m?.tied_to_counts }).slice(0, 300)}`);
+    const thrown = measures.filter((f) => f.family === "solution" && /measure that throws, forced/.test(f.why)), ruled = measures.filter((f) => f.family === "table" && /line_height "forced".*written empty/.test(f.why));
+    if (m?.fault_counts?.["body text"] !== 6 || m?.fault_counts?.measures !== 12 || faults.length !== 18 || m?.tied_to_counts !== true || m?.not_tied?.length !== 0
+      || body.some((f) => f.family !== null || !/body text that cannot be read, forced/.test(f.why)) || thrown.length !== 6 || ruled.length !== 6)
+      problems.push(`expected provenance metrics to record six body-text faults and twelve measure faults (six thrown, six by the writer's rules), tied to the counts, got ${JSON.stringify({ fault_counts: m?.fault_counts, faults: faults.slice(0, 2), tied: m?.tied_to_counts }).slice(0, 300)}`);
     const want = parseMetricsCsv(await readFile(join(HERE, "expected-good-metrics.csv"), "utf8")).filter((x) => x.page === DRAWN_PAGE);
     const rows = await rowsOf(join(out, "metrics.csv"), parseMetricsCsv, problems, "metrics.csv");
     if (rows) {
@@ -430,13 +438,13 @@ async function faultCheck(goodDir, base) {
         problems.push(`expected the page's ${want.length} rows and the table's 6, none with body measures, got ${rows.length} rows (${JSON.stringify(rows.find((x) => x.body_font_size !== "") ?? null).slice(0, 160)})`);
       if (sol.length !== 6 || sol.some((x) => x.width !== "" || x.text !== "" || !x.key.startsWith("label:")))
         problems.push(`expected the solution's six rows written without their measures and with their key, got ${JSON.stringify(sol[0] ?? null).slice(0, 200)}`);
-      if (tab.length !== 6 || tab.some((x) => x.overflow !== "0" || x.text !== ODD_TAG))
-        problems.push(`expected the table's six rows with an overflow of 0 and the text in ${ODD_TAG}, got ${JSON.stringify(tab[0] ?? null).slice(0, 200)}`);
+      if (tab.length !== 6 || tab.some((x) => x.overflow !== "0" || x.text !== ODD_TAG || x.line_height !== "" || x.font_size === ""))
+        problems.push(`expected the table's six rows with an overflow of 0, the text in ${ODD_TAG} and no line height, got ${JSON.stringify(tab[0] ?? null).slice(0, 200)}`);
     }
   } finally {
     await rm(work, { recursive: true, force: true });
   }
-  console.log(`${problems.length ? "FAIL" : "ok  "} run.mjs on the good site built for ${base}, its body text and a measure forced to fail, with a bordered table and an odd tag: warnings, recorded in provenance, every row written, exit 0${problems.length ? `, ${problems.length} mismatch(es)` : ""}`);
+  console.log(`${problems.length ? "FAIL" : "ok  "} run.mjs on the good site built for ${base}, its body text and a measure forced to fail, with a bordered table, an odd tag and a value the writer's rules refuse: warnings, recorded in provenance, every row written, exit 0${problems.length ? `, ${problems.length} mismatch(es)` : ""}`);
   for (const p of problems) console.log(`       ${p}`);
   return problems;
 }
