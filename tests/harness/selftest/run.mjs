@@ -43,7 +43,10 @@
 // small page of their own, each pinned. Then run.mjs is run on each build of the good site with that table, on one
 // page: it must write the same counts and metrics, record the selector that threw in provenance.json (schema 3), and
 // exit 1 for it; with --no-metrics it must write the same counts and no metrics.csv; and its run without page-wide
-// checks must write neither counts.csv nor metrics.csv.
+// checks must write neither counts.csv nor metrics.csv. Last, run.mjs is run, as in GitHub Actions, on a build of the
+// good site whose body text is forced not to be read: a problem with the metrics warns and never fails the run
+// (QuantEcon/project-theme-parity#80), so it must exit 0, print the "Style metrics problems" warning, and record the
+// fault in provenance.json. The self-test itself fails on any metrics mismatch, as on any other.
 //
 // Exit 1 on any mismatch, so the job fails before the real run. In GitHub Actions each site's mismatches are also an
 // ::error:: annotation, so the run's annotations say what CI read.
@@ -331,6 +334,50 @@ async function unitChecks() {
   return problems;
 }
 
+// run.mjs, as in GitHub Actions, on a build of the good site whose typography page forces a problem with the metrics:
+// the content root's own querySelectorAll, which only the body text's reading calls, throws, so the body text cannot
+// be read at any of the six readings. With the drawn table less the selector that throws (so no count fails the run),
+// run.mjs must exit 0, print the "Style metrics problems" warning and the problem in its summary, and record the six
+// body-text faults in provenance.json, the page's rows still written, with no body measures.
+const FAULT_SCRIPT = `<script>/* the self-test's forced problem with the metrics: the body text cannot be read */
+document.querySelector(${JSON.stringify(theme.content)}).querySelectorAll = () => { throw new Error("a body text that cannot be read, forced by the self-test"); };</script>`;
+async function faultCheck(goodDir, base) {
+  const work = await mkdtemp(join(tmpdir(), "harness-selftest-fault-"));
+  const env = { ...process.env, GITHUB_ACTIONS: "true" };
+  delete env.GITHUB_STEP_SUMMARY;
+  const problems = [];
+  try {
+    const dir = join(work, "site");
+    await cp(goodDir, dir, { recursive: true });
+    const rel = theme.pagePath(DRAWN_PAGE);
+    const file = join(dir, rel === "" || rel.endsWith("/") ? join(rel, "index.html") : rel);
+    await writeFile(file, (await readFile(file, "utf8")).replace("</body>", `${FAULT_SCRIPT}\n</body>`));
+    const table = YAML.parse(await readFile(join(HERE, "drawn.yml"), "utf8"));
+    table.families = table.families.filter((f) => !(typeof f.selector === "string" && f.selector.endsWith(":captioned")));
+    const drawnFile = join(work, "drawn.yml");
+    await writeFile(drawnFile, YAML.stringify(table));
+    const out = join(work, "out");
+    const r = spawnSync(process.execPath, [join(HERE, "..", "run.mjs"), "--dir", dir, "--base-path", base, "--table", join(HERE, "locators.yml"),
+      "--drawn", drawnFile, "--labels", join(HERE, "labels.yml"), "--only", "header-title", "--pages", DRAWN_PAGE, "--quiet", "--out", out], { encoding: "utf8", env });
+    if (r.status !== 0) problems.push(`expected exit 0, a problem with the metrics being a warning, got ${r.status} (${(r.stderr || r.stdout).trim().split("\n").pop()})`);
+    if (!r.stdout.includes("::warning title=Style metrics problems::")) problems.push("expected the \"Style metrics problems\" warning on stdout, and found none");
+    if (!/Metrics problems: 6 \(measures 0, key 0, body text 6\)/.test(r.stdout)) problems.push(`expected the summary to give 6 body-text problems, got ${JSON.stringify(r.stdout.split("\n").find((l) => l.startsWith("Metrics problems")) ?? "no such line")}`);
+    const prov = JSON.parse(await readFile(join(out, "provenance.json"), "utf8").catch(() => "null"));
+    const m = prov?.metrics, faults = m?.faults ?? [];
+    if (m?.fault_counts?.["body text"] !== 6 || faults.length !== 6 || faults.some((f) => f.kind !== "body text" || f.family !== null || !/forced by the self-test/.test(f.why)) || m?.tied_to_counts !== true)
+      problems.push(`expected provenance metrics to record six body-text faults, tied to the counts, got ${JSON.stringify({ fault_counts: m?.fault_counts, faults: faults.slice(0, 2), tied: m?.tied_to_counts }).slice(0, 300)}`);
+    const want = parseMetricsCsv(await readFile(join(HERE, "expected-good-metrics.csv"), "utf8")).filter((x) => x.page === DRAWN_PAGE);
+    const rows = parseMetricsCsv(await readFile(join(out, "metrics.csv"), "utf8").catch(() => ""));
+    if (rows.length !== want.length || rows.some((x) => x.body_font_size !== "" || x.column !== "" || x.text === ""))
+      problems.push(`expected the page's ${want.length} rows written with their measures and no body measures, got ${rows.length} rows (${JSON.stringify(rows.find((x) => x.body_font_size !== "") ?? rows[0] ?? null).slice(0, 160)})`);
+  } finally {
+    await rm(work, { recursive: true, force: true });
+  }
+  console.log(`${problems.length ? "FAIL" : "ok  "} run.mjs on the good site built for ${base}, its body text forced not to be read: a warning, recorded in provenance, exit 0${problems.length ? `, ${problems.length} mismatch(es)` : ""}`);
+  for (const p of problems) console.log(`       ${p}`);
+  return problems;
+}
+
 const labels = YAML.parse(await readFile(join(HERE, "labels.yml"), "utf8"));
 const table = await readTable(join(HERE, "locators.yml"), theme.side);
 const drawn = await readDrawn(join(HERE, "drawn.yml"), theme.side);
@@ -362,6 +409,9 @@ try {
       const counted = await drawnCheck(join(into, "good"), base);
       bad += counted.length;
       if (counted.length) annotate("error", [`self-test: run.mjs's counts on the good site built for ${base}`, ...counted]);
+      const warned = await faultCheck(join(into, "good"), base);
+      bad += warned.length;
+      if (warned.length) annotate("error", [`self-test: run.mjs's warning for a problem with the metrics, on the good site built for ${base}`, ...warned]);
     }
   }
 } finally {

@@ -5,12 +5,14 @@
 //   node tests/harness/run.mjs --url <site URL>                          check a live site
 //
 // It writes `rendered.csv`, `counts.csv`, `metrics.csv` and `provenance.json` into --out (default `_harness/` at the
-// repository root) and prints a summary. Exit 0: every check ran, and every count and measure was taken (failed
-// checks are rows, and counts and metrics are data, never a failed run). Exit 1: a check could not run (an `error`
-// row: it threw, a page did not load, or a colour scheme did not take effect), a drawn selector threw, or the metrics
-// had a problem: a surface's measures threw, a surface's key source threw, a page's body text could not be read, or
-// the metrics do not tie to the counts; the CSVs are still written. Exit 2: nothing was checked (a bad argument, a
-// locator or drawn table that does not parse, a site that cannot be served).
+// repository root) and prints a summary. Exit 0: every check ran and every count was taken (failed checks are rows,
+// and counts and metrics are data, never a failed run). Exit 1: a check could not run (an `error` row: it threw, a
+// page did not load, or a colour scheme did not take effect), or a drawn selector threw; the CSVs are still written.
+// A problem with the metrics (a surface's measures or key source threw, a page's body text could not be read, or the
+// metrics do not tie to the counts) never fails the run: it is a warning on the run in GitHub Actions, and is in
+// provenance.json (`metrics.faults`, `metrics.tied_to_counts`) and the summary, so it never holds back what the deploy
+// publishes. Exit 2: nothing was checked (a bad argument, a locator or drawn table that does not parse, a site that
+// cannot be served).
 //
 // Options: --out DIR, --jobs N (default 4), --table FILE (default locators.yml), --drawn FILE (default drawn.yml),
 // --no-drawn (no counts, and so no metrics: no counts.csv or metrics.csv), --no-metrics (the counts without the
@@ -287,10 +289,11 @@ async function main() {
   if (process.env.GITHUB_ACTIONS === "true") console.log(`::notice title=Drawn counts::${escape(countLines.join("\n").slice(0, 4000))}`);
   // the metrics, likewise
   if (process.env.GITHUB_ACTIONS === "true") console.log(`::notice title=Style metrics::${escape(metricLines.join("\n").slice(0, 4000))}`);
-  // the metrics' problems, as a warning on the run, whether or not the exit status below fails the job for them
+  // the metrics' problems, as a warning on the run: they never fail it (QuantEcon/project-theme-parity#80, the
+  // owner's answer on 2026-11-28), so a problem with the metrics never withholds /_harness/, counts.csv included
   const problems = measuring ? faults.length + (tie.ok ? 0 : tie.off.length) : 0;
   if (process.env.GITHUB_ACTIONS === "true" && problems) console.log(`::warning title=Style metrics problems::${escape([`${problems} problem(s) with the metrics:`, ...(tie.ok ? [] : [`${tie.off.length} reading(s) do not tie to counts.csv: ${tie.off.slice(0, 12).join("; ")}`]), ...faults.slice(0, 20).map((x) => `${x.kind}: ${x.page} ${x.family ?? ""} ${x.viewport} ${x.scheme}${x.n ? ` n ${x.n}` : ""}: ${x.why}`)].join("\n").slice(0, 4000))}`);
-  return errors.length || threw.length || faults?.length || (tie && !tie.ok) ? 1 : 0;
+  return errors.length || threw.length ? 1 : 0;
 }
 
 /** How many metrics problems of each kind. */

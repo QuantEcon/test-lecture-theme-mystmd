@@ -130,7 +130,7 @@ async function featureTask(browser, run, f, scheme) {
 // `run.metrics`, each shown surface's metrics: { rows, counts, uncounted, metrics, faults, fonts }. A page that does
 // not load, or whose scheme does not take effect, gives error rows, empty counts and no metrics; a selector that
 // throws gives that family an empty count, no metrics and an `uncounted` entry, which makes the run exit 1. `faults`
-// names each metrics problem, by kind: `measures` (a surface's measures threw: its row is written with them empty),
+// names each metrics problem, a warning that never fails the run, by kind: `measures` (a surface's measures threw: its row is written with them empty),
 // `key` (its source threw: its row has no key) and `body text` (the page's body text could not be read: its rows have
 // no body measures). `fonts` is what the measured text rendered with, the font files the page's main frame loaded and
 // those its frames loaded, and the maths engines, for provenance's environment.
